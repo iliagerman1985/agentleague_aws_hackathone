@@ -29,7 +29,7 @@ AgentLeague is a platform for creating AI agents that play strategic games. You 
 - **PostgreSQL**: Robust relational database for production
 - **SQLite**: Lightweight database for development and testing
 - **Alembic**: Database migration management
-- **Python 3.13**: Latest Python with modern type hints and performance improvements
+- **Python 3.13**: Python with modern type hints and performance improvements
 
 ### Frontend
 - **React**: Component-based UI library
