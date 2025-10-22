@@ -1,6 +1,6 @@
 # AgentLeague 🎮🤖
 
-**AgentLeague** is a competitive AI gaming platform where you create, train, and battle intelligent agents in strategic games like Chess and Texas Hold'em Poker. Build custom tools, test strategies in the playground, and watch your agents compete against others in real-time matches.
+**AgentLeague** is a competitive AI gaming platform where you create, train, and battle intelligent agents in strategic games like Chess. Build custom tools, test strategies in the playground, and watch your agents compete against others in real-time matches.
 
 ---
 
@@ -17,8 +17,7 @@ AgentLeague is a platform for creating AI agents that play strategic games. You 
 ### Supported Games
 
 - **♟️ Chess**: Strategic board game with full move validation and Stockfish-powered analysis
-- **🃏 Texas Hold'em Poker**: Classic poker with betting rounds and strategic decision-making
-- **🎲 More games coming soon**: Catan, Monopoly, Tanks, and more!
+- **� More games coming soon**: Texas Hold'em Poker, Catan, Monopoly, Tanks, and more!
 
 ---
 
@@ -29,7 +28,7 @@ AgentLeague is a platform for creating AI agents that play strategic games. You 
 - **PostgreSQL**: Robust relational database for production
 - **SQLite**: Lightweight database for development and testing
 - **Alembic**: Database migration management
-- **Python 3.13**: Python with modern type hints and performance improvements
+- **Python 3.13**: Modern Python with advanced type hints and performance improvements
 
 ### Frontend
 - **React**: Component-based UI library
@@ -81,13 +80,14 @@ That's it! The dev container handles all other dependencies automatically.
    - VS Code will prompt you to "Reopen in Container"
    - Click "Reopen in Container" (or press F1 → "Dev Containers: Reopen in Container")
    - Wait for the container to build (first time takes a few minutes)
+   - The dev container automatically installs all dependencies on startup
 
-4. **Install dependencies**:
+4. **Start local services** (LocalStack and PostgreSQL):
    ```bash
-   just sync
+   just local_dev
    ```
 
-5. **Create SQS queues** (for local development):
+5. **Create SQS queues** (for local AWS services):
    ```bash
    just create_sqs
    ```
@@ -116,6 +116,18 @@ just run-client     # Frontend development server
 just run-agentcore  # AgentCore service
 ```
 
+### Manual Dependency Installation (if needed)
+
+If you need to manually install or update dependencies:
+
+```bash
+# Install all Python and Node.js dependencies
+just setup
+
+# Or just Python dependencies
+just sync
+```
+
 
 ---
 
@@ -128,7 +140,7 @@ just run-agentcore  # AgentCore service
 3. Fill in the details:
    - **Name**: Give your agent a memorable name
    - **Description**: Describe your agent's strategy
-   - **Game Environment**: Choose Chess or Texas Hold'em
+   - **Game Environment**: Choose Chess
    - **Instructions**: Write instructions for how your agent should play
    - **LLM Model**: Select which AI model powers your agent
 
@@ -148,7 +160,7 @@ Tools give your agents special abilities to analyze the game state and make bett
 
 1. Go to the **Tools** page
 2. Click **"Create Tool"**
-3. Select the game environment (Chess or Poker)
+3. Select the game environment (Chess)
 4. **Chat with the AI assistant** to generate your tool:
    - Describe what you want the tool to do
    - The AI will generate Python code for you
@@ -157,9 +169,9 @@ Tools give your agents special abilities to analyze the game state and make bett
 
 **Example Tool Prompts**:
 - "Create a tool that evaluates chess positions and returns a score"
-- "Make a tool that calculates pot odds in poker"
 - "Build a tool that identifies tactical patterns on the chess board"
-- "Create a tool that analyzes opponent betting patterns"
+- "Make a tool that suggests the best opening moves"
+- "Create a tool that detects checkmate threats"
 
 The AI assistant will:
 - Generate complete Python code
@@ -182,8 +194,6 @@ Your agent can now use these tools during games to make smarter decisions!
 
 The playground lets you test your agent in specific game positions before competing.
 
-#### Chess Playground
-
 1. Go to **Chess → Playground**
 2. Select your agent
 3. Choose opponent type:
@@ -195,26 +205,16 @@ The playground lets you test your agent in specific game positions before compet
    - Or load a saved test scenario
 5. Click **"Start Playground"**
 
-#### Poker Playground
-
-1. Go to **Poker → Playground**
-2. Select your agent
-3. Configure game settings:
-   - Small blind / Big blind
-   - Starting chips
-   - Number of players
-4. Click **"Start Playground"**
-
 ### 5. Generate Test Scenarios
 
 Create specific game positions to test your agent's decision-making:
 
 1. Go to the **Testing** page
-2. Select your game environment
+2. Select Chess as your game environment
 3. Describe the scenario you want:
    - "Create a chess endgame with rooks and pawns"
-   - "Generate a poker hand with a flush draw"
    - "Set up a tactical chess puzzle with a knight fork"
+   - "Generate a middlegame position with opposite-side castling"
 4. The AI will generate a valid game state
 5. **Preview** the position visually
 6. **Save** it for later use in the playground
@@ -249,14 +249,8 @@ After a game:
 - Captured pieces display
 - Board flipping based on player color
 - Playground mode for testing positions
-
-### Texas Hold'em Poker
-- Complete poker hand evaluation
-- Betting rounds (pre-flop, flop, turn, river)
-- Pot management and side pots
-- All-in scenarios
-- Auto-buy and auto-reenter options
-- Multi-player support (up to 5 players)
+- Custom position setup and test scenarios
+- Real-time game replay with analysis
 
 
 ---
