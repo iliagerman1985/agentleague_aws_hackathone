@@ -1,0 +1,36 @@
+# AWS Configuration
+aws_region  = "us-east-1"
+project_name = "agentleague"
+environment  = "hackathon"
+
+# Domain Configuration
+frontend_domain_name = "app.hackathon.agentleague.ai"
+backend_domain_name  = "api.hackathon.agentleague.ai"
+
+# ACM Certificate (wildcard for *.hackathon.agentleague.ai)
+certificate_arn = "arn:aws:acm:us-east-1:619403130674:certificate/7f813be9-99f6-43dd-bce1-36a1c25f222e"
+
+# Route 53
+route53_zone_id = "YOUR_ROUTE53_ZONE_ID_HERE"
+
+# AWS Secrets Manager
+aws_secrets_manager_secret_name = "hackathon_secret"
+
+# ECR Repositories
+ecr_backend_repository_url   = "619403130674.dkr.ecr.us-east-1.amazonaws.com/agentleague-backend"
+ecr_agentcore_repository_url = "619403130674.dkr.ecr.us-east-1.amazonaws.com/agentleague-agentcore"
+
+# ECS Task Configuration
+backend_cpu           = 1024  # 1 vCPU
+backend_memory        = 2048  # 2 GB
+postgres_cpu          = 512   # 0.5 vCPU
+postgres_memory       = 1024  # 1 GB
+backend_desired_count = 1
+postgres_desired_count = 1
+
+# CloudFront Configuration
+cloudfront_price_class = "PriceClass_100"  # North America and Europe only
+
+# S3 Bucket
+s3_bucket_name = "agentleague-hackathon-frontend"
+

@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  backend:
+    image: ${ECR_BACKEND_REPO}:${IMAGE_TAG}
+    container_name: agentleague-backend
+    restart: unless-stopped
+    environment:
+      - APP_ENV=development
+    ports:
+      - "9998:9998"
+    volumes:
+      - /opt/app/logs:/app/logs
+    depends_on:
+      - db
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9998/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    image: ${ECR_FRONTEND_REPO}:${IMAGE_TAG}
+    container_name: agentleague-frontend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=
+    ports:
+      - "5888:5888"
+    volumes:
+      - /opt/app/logs:/app/logs
+    depends_on:
+      - backend
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5888/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: agentleague-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${DB_NAME:-agent_league}
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - /mnt/pgdata:/var/lib/postgresql/data
+      - app_logs:/var/log/postgresql
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-agent_league}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  # IMPORTANT: postgres_data volume is preserved during cleanup to maintain database persistence
+  postgres_data:
+    driver: local
+  app_logs:
+    driver: local
+
+networks:
+  app_network:
+    driver: bridge

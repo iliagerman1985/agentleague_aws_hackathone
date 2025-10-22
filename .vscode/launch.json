@@ -1,0 +1,111 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Backend",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "run_uvicorn",
+            "args": [],
+            "cwd": "${workspaceFolder}/backend",
+            "console": "integratedTerminal",
+            "presentation": {
+                "hidden": false,
+                "group": "Backend",
+                "order": 1
+            },
+            "env": {
+                "APP_ENV": "local"
+            },
+            "justMyCode": false
+        },
+        {
+            "name": "AgentCore Service",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "uvicorn",
+            "args": [
+                "app.services.agent_runner.agentcore_handler:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8765",
+                "--reload",
+                "--reload-dir",
+                ".",
+                "--reload-dir",
+                "../libs"
+            ],
+            "cwd": "${workspaceFolder}/backend",
+            "console": "integratedTerminal",
+            "presentation": {
+                "hidden": false,
+                "group": "AgentCore",
+                "order": 1
+            },
+            "env": {
+                "APP_ENV": "local",
+            },
+            "justMyCode": false
+        },
+        {
+            "name": "Frontend",
+            "type": "node",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/client",
+            "runtimeExecutable": "npm",
+            "args": [
+                "run",
+                "dev"
+            ],
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "env": {
+                "NODE_ENV": "development"
+            },
+            "presentation": {
+                "hidden": false,
+                "group": "Frontend",
+                "order": 1
+            },
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Browser",
+            "type": "chrome",
+            "request": "launch",
+            "url": "http://localhost:5888",
+            "webRoot": "${workspaceFolder}/client/src",
+            "timeout": 60000,
+            "presentation": {
+                "hidden": false,
+                "group": "Frontend",
+                "order": 2
+            }
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Full Stack",
+            "configurations": [
+                "Backend",
+                "Frontend",
+                "Browser",
+                "AgentCore Service"
+            ],
+            "presentation": {
+                "hidden": false,
+                "group": "Full Stack",
+                "order": 0
+            }
+        }
+    ]
+}

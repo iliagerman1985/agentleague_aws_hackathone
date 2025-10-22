@@ -1,0 +1,145 @@
+{
+  "alb_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:elasticloadbalancing:us-east-1:619403130674:loadbalancer/app/agentleague-hackathon-alb/7165c3c7e36d7a7e"
+  },
+  "alb_dns_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "agentleague-hackathon-alb-885285844.us-east-1.elb.amazonaws.com"
+  },
+  "aurora_cluster_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "agentleague-hackathon-aurora-cluster.cluster-cg1igkie08f2.us-east-1.rds.amazonaws.com"
+  },
+  "aurora_cluster_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "agentleague-hackathon-aurora-cluster"
+  },
+  "aurora_cluster_port": {
+    "sensitive": false,
+    "type": "number",
+    "value": 5432
+  },
+  "aurora_cluster_reader_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "agentleague-hackathon-aurora-cluster.cluster-ro-cg1igkie08f2.us-east-1.rds.amazonaws.com"
+  },
+  "aurora_credentials_secret_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:secretsmanager:us-east-1:619403130674:secret:agentleague-hackathon-aurora-credentials-5pJltj"
+  },
+  "aurora_database_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "agentleague"
+  },
+  "aurora_master_username": {
+    "sensitive": true,
+    "type": "string",
+    "value": "postgres"
+  },
+  "backend_service_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "agentleague-hackathon-backend"
+  },
+  "backend_target_group_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:elasticloadbalancing:us-east-1:619403130674:targetgroup/agentleague-hackathon-backend-tg/310af830d1af50e7"
+  },
+  "backend_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://api.hackathon.agentleague.ai"
+  },
+  "cloudfront_distribution_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "E1U2F7ZZL2P1JQ"
+  },
+  "cloudfront_domain_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "djvk5op4v9pkt.cloudfront.net"
+  },
+  "database_connection_string": {
+    "sensitive": true,
+    "type": "string",
+    "value": "postgresql://postgres@agentleague-hackathon-aurora-cluster.cluster-cg1igkie08f2.us-east-1.rds.amazonaws.com:5432/agentleague"
+  },
+  "ecs_cluster_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:ecs:us-east-1:619403130674:cluster/agentleague-hackathon-cluster"
+  },
+  "ecs_cluster_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "agentleague-hackathon-cluster"
+  },
+  "frontend_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://app.hackathon.agentleague.ai"
+  },
+  "game_analysis_queue_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://sqs.us-east-1.amazonaws.com/619403130674/agentleague-game-analysis-queue-hackathon"
+  },
+  "game_turn_queue_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://sqs.us-east-1.amazonaws.com/619403130674/agentleague-game-turn-queue-hackathon"
+  },
+  "private_subnet_ids": {
+    "sensitive": false,
+    "type": [
+      "tuple",
+      [
+        "string",
+        "string"
+      ]
+    ],
+    "value": [
+      "subnet-0497e7adb0f4d3556",
+      "subnet-05aef0755f691496d"
+    ]
+  },
+  "public_subnet_ids": {
+    "sensitive": false,
+    "type": [
+      "tuple",
+      [
+        "string",
+        "string"
+      ]
+    ],
+    "value": [
+      "subnet-03a960f69c7ba2083",
+      "subnet-0929d93ef93b8659d"
+    ]
+  },
+  "s3_bucket_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:s3:::agentleague-hackathon-frontend"
+  },
+  "s3_bucket_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "agentleague-hackathon-frontend"
+  },
+  "vpc_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "vpc-0ae71a20f9ff1d699"
+  }
+}

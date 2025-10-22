@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent League</title>
+
+    <!-- Favicon and Icons -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/svg+xml" href="/icon.svg">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+    <!-- PWA Icons -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
+
+    <!-- Theme and App Metadata -->
+    <meta name="theme-color" content="#3B82F6">
+    <meta name="description" content="Agent League - A modern full-stack application">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+
+    <!-- Theme FOUC Prevention Script -->
+    <script>
+        (function() {
+            try {
+                const savedTheme = localStorage.getItem('theme');
+                const theme = savedTheme && ['light', 'dark', 'system'].includes(savedTheme) ? savedTheme : 'dark';
+
+                let resolvedTheme = 'dark'; // default
+
+                if (theme === 'system') {
+                    // Check system preference
+                    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                        resolvedTheme = 'dark';
+                    } else {
+                        resolvedTheme = 'light';
+                    }
+                } else {
+                    resolvedTheme = theme;
+                }
+
+                // Apply theme class immediately to prevent FOUC
+                document.documentElement.classList.add(resolvedTheme);
+            } catch (e) {
+                // Fallback to dark theme if anything goes wrong
+                document.documentElement.classList.add('dark');
+            }
+        })();
+    </script>
+</head>
+<body>
+    <div id="root">
+        <!-- Loading fallback content -->
+        <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background-color: #f9fafb;">
+            <div style="text-align: center;">
+                <div style="width: 32px; height: 32px; border: 2px solid rgba(0,0,0,0.12); border-top: 2px solid var(--brand-orange, #EA580C); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
+                <p style="color: #475569; font-family: system-ui, -apple-system, sans-serif;">Loading...</p>
+            </div>
+        </div>
+        <style>
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        </style>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

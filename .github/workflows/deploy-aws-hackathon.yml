@@ -1,0 +1,305 @@
+name: Deploy to AWS Hackathon Environment
+
+on:
+  push:
+    branches: [ hackathon ]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  PROJECT_NAME: agentleague
+  ENVIRONMENT: hackathon
+
+concurrency:
+  group: deploy-hackathon
+  cancel-in-progress: true
+
+permissions:
+  id-token: write   # This is required for requesting the JWT
+  contents: read    # This is required for actions/checkout
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install/Update AWS CLI to latest version
+      run: |
+        echo "Updating AWS CLI to latest version..."
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+        unzip awscliv2.zip
+        sudo ./aws/install --update
+        aws --version
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::619403130674:role/github
+        role-session-name: GitHub_to_AWS_via_FederatedOIDC
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Verify AWS authentication
+      run: |
+        echo "Verifying AWS authentication..."
+        aws sts get-caller-identity
+        echo "AWS authentication successful!"
+        echo "AWS CLI version:"
+        aws --version
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Get ECR repository URIs
+      id: ecr-repos
+      run: |
+        BACKEND_REPO=$(aws ecr describe-repositories --repository-names ${{ env.PROJECT_NAME }}-backend-hackathon --query 'repositories[0].repositoryUri' --output text)
+        AGENTCORE_REPO=$(aws ecr describe-repositories --repository-names ${{ env.PROJECT_NAME }}-agentcore-hackathon --query 'repositories[0].repositoryUri' --output text)
+        echo "backend-repo=$BACKEND_REPO" >> $GITHUB_OUTPUT
+        echo "agentcore-repo=$AGENTCORE_REPO" >> $GITHUB_OUTPUT
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      with:
+        driver-opts: |
+          network=host
+        buildkitd-flags: |
+          --allow-insecure-entitlement security.insecure
+          --allow-insecure-entitlement network.host
+
+    - name: Pre-warm cache by pulling existing images
+      continue-on-error: true
+      run: |
+        echo "🔥 Pre-warming cache by pulling existing images..."
+        docker pull ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-backend-hackathon:latest || echo "Backend image not found, will build from scratch"
+        docker pull ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-agentcore-hackathon:latest || echo "AgentCore image not found, will build from scratch"
+
+    - name: Build and push backend
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: backend/Dockerfile
+        platforms: linux/amd64
+        push: true
+        tags: |
+          ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-backend-hackathon:${{ github.run_id }}
+          ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-backend-hackathon:latest
+          ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-backend-hackathon:hackathon
+        cache-from: |
+          type=gha,scope=backend-hackathon
+          type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-backend-hackathon:cache
+        cache-to: |
+          type=gha,mode=max,scope=backend-hackathon
+          type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-backend-hackathon:cache,mode=max
+
+    - name: Build and push AgentCore
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: backend/Dockerfile.agentcore
+        platforms: linux/arm64
+        push: true
+        tags: |
+          ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-agentcore-hackathon:${{ github.run_id }}
+          ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-agentcore-hackathon:latest
+          ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-agentcore-hackathon:hackathon
+        cache-from: |
+          type=gha,scope=agentcore-hackathon
+          type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-agentcore-hackathon:cache
+        cache-to: |
+          type=gha,mode=max,scope=agentcore-hackathon
+          type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-agentcore-hackathon:cache,mode=max
+
+    - name: Deploy AgentCore to Bedrock AgentCore
+      id: deploy-agentcore
+      env:
+        AGENTCORE_REPO: ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-agentcore-hackathon
+        AWS_REGION: ${{ env.AWS_REGION }}
+        PROJECT_NAME: ${{ env.PROJECT_NAME }}
+      run: |
+        set -euo pipefail
+        set -x
+        echo "🚀 Deploying AgentCore to Bedrock AgentCore..."
+
+        # Ensure CLI supports AgentCore
+        if ! aws bedrock-agentcore-control help >/dev/null 2>&1; then
+          echo "bedrock-agentcore-control not available in AWS CLI"; aws --version; exit 1
+        fi
+
+        # Set environment variables from repo .env file
+        export ENVIRONMENT=${{ env.ENVIRONMENT }}
+        set -a
+        # Load per-environment config for AgentCore
+        if [ -f "libs/common/.env.${ENVIRONMENT}" ]; then
+          . "libs/common/.env.${ENVIRONMENT}"
+        fi
+        set +a
+
+        # Resolve values from .env
+        export RUNTIME_NAME="${AGENTCORE_RUNTIME_NAME:-agentleague-${ENVIRONMENT}-runtime}"
+        export REGION="${AGENTCORE_AWS_REGION:-${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}}"
+
+        echo "Environment: ${ENVIRONMENT}"
+        echo "Runtime Name: ${RUNTIME_NAME}"
+        echo "AgentCore Repo: ${AGENTCORE_REPO}"
+
+        # Delegate AgentCore upsert (role ensure + create/update) to script
+        chmod +x scripts/deploy-agentcore.sh
+        ./scripts/deploy-agentcore.sh hackathon
+
+    - name: Ensure secrets exist in AWS Secrets Manager
+      run: |
+        echo "🔐 Checking if secrets exist in AWS Secrets Manager..."
+        if ! aws secretsmanager describe-secret --secret-id "hackathon_secret" --region ${{ env.AWS_REGION }} &> /dev/null; then
+          echo "⚠️  Secrets not found, creating hackathon_secret..."
+          chmod +x scripts/create-hackathon-secret.sh
+          echo "y" | scripts/create-hackathon-secret.sh
+        else
+          echo "✅ Secret 'hackathon_secret' already exists"
+        fi
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: client/package-lock.json
+
+    - name: Build frontend for S3
+      working-directory: ./client
+      env:
+        VITE_API_URL: https://api.hackathon.agentleague.ai
+        VITE_COGNITO_REGION: us-east-1
+        VITE_COGNITO_POOL_NAME: AgentLeague
+        VITE_COGNITO_CLIENT_NAME: AgentLeague
+        VITE_COGNITO_USER_POOL_ID: us-east-1_Vatg7HDwE
+        VITE_COGNITO_CLIENT_ID: 29cjti5omhe6b7l94j9af4qop9
+        VITE_COGNITO_DOMAIN: https://login.agentleague.app
+        VITE_COGNITO_CALLBACK_URL: https://app.hackathon.agentleague.ai/auth/callback
+        SUCCESS_URL: https://app.hackathon.agentleague.ai/billing/success
+        CANCEL_URL: https://app.hackathon.agentleague.ai/billing/cancel
+      run: |
+        echo "📦 Installing dependencies..."
+        npm ci
+        echo "🏗️  Building frontend..."
+        npm run build:s3
+        echo "✅ Frontend build complete"
+        ls -lah dist/
+
+    - name: Upload frontend to S3
+      run: |
+        echo "📤 Uploading frontend to S3..."
+        # Upload all files except index.html and manifest.json with long cache
+        aws s3 sync client/dist/ s3://agentleague-hackathon-frontend/ \
+          --delete \
+          --cache-control "public, max-age=31536000, immutable" \
+          --exclude "index.html" \
+          --exclude "manifest.json"
+        
+        # Upload index.html with no-cache
+        aws s3 cp client/dist/index.html s3://agentleague-hackathon-frontend/index.html \
+          --cache-control "public, max-age=0, must-revalidate"
+        
+        # Upload manifest.json with no-cache (if exists)
+        if [ -f client/dist/manifest.json ]; then
+          aws s3 cp client/dist/manifest.json s3://agentleague-hackathon-frontend/manifest.json \
+            --cache-control "public, max-age=0, must-revalidate"
+        fi
+        echo "✅ Frontend uploaded to S3"
+
+    - name: Invalidate CloudFront cache
+      run: |
+        echo "🔄 Invalidating CloudFront cache..."
+        DISTRIBUTION_ID=$(aws cloudfront list-distributions \
+          --query "DistributionList.Items[?Aliases.Items[?contains(@, 'app.hackathon.agentleague.ai')]].Id | [0]" \
+          --output text)
+        
+        if [ -n "$DISTRIBUTION_ID" ] && [ "$DISTRIBUTION_ID" != "None" ]; then
+          aws cloudfront create-invalidation \
+            --distribution-id $DISTRIBUTION_ID \
+            --paths "/*"
+          echo "✅ CloudFront cache invalidated for distribution: $DISTRIBUTION_ID"
+        else
+          echo "⚠️  CloudFront distribution not found"
+          exit 1
+        fi
+
+    - name: Update ECS task definition with AgentCore ARN
+      run: |
+        echo "� Updating ECS task definition with AgentCore Runtime ARN..."
+
+        # Get the AgentCore Runtime ARN
+        RUNTIME_ARN="${{ steps.deploy-agentcore.outputs.runtime-arn }}"
+
+        if [ -z "$RUNTIME_ARN" ]; then
+          echo "⚠️  AgentCore Runtime ARN not found, fetching from AWS..."
+          RUNTIME_ARN=$(aws bedrock-agentcore-control list-agent-runtimes \
+            --region ${{ env.AWS_REGION }} \
+            --query "agentRuntimes[?agentRuntimeName=='agentleague_hackathon_runtime'].agentRuntimeArn" \
+            --output text)
+        fi
+
+        echo "AgentCore Runtime ARN: $RUNTIME_ARN"
+
+        # Get current task definition
+        TASK_DEFINITION=$(aws ecs describe-task-definition \
+          --task-definition agentleague-hackathon-backend \
+          --region ${{ env.AWS_REGION }} \
+          --query 'taskDefinition' \
+          --output json)
+
+        # Update the environment variables in the container definition
+        # Remove AGENTCORE_RUNTIME_ARN if it exists, then add it with the new value
+        NEW_TASK_DEF=$(echo "$TASK_DEFINITION" | jq --arg arn "$RUNTIME_ARN" '
+          (.containerDefinitions[0].environment // []) |= (
+            map(select(.name != "AGENTCORE_RUNTIME_ARN")) +
+            [{name: "AGENTCORE_RUNTIME_ARN", value: $arn}]
+          ) |
+          del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)
+        ')
+
+        # Debug: Show the new task definition environment variables
+        echo "Environment variables in new task definition:"
+        echo "$NEW_TASK_DEF" | jq -r '.containerDefinitions[0].environment[] | "\(.name)=\(.value)"' | grep AGENTCORE || echo "AGENTCORE_RUNTIME_ARN not found!"
+
+        # Save to file for debugging
+        echo "$NEW_TASK_DEF" > /tmp/new-task-def.json
+
+        # Register new task definition
+        NEW_TASK_ARN=$(aws ecs register-task-definition \
+          --cli-input-json file:///tmp/new-task-def.json \
+          --region ${{ env.AWS_REGION }} \
+          --query 'taskDefinition.taskDefinitionArn' \
+          --output text)
+
+        echo "✅ New task definition registered: $NEW_TASK_ARN"
+
+        # Update the service to use the new task definition
+        aws ecs update-service \
+          --cluster agentleague-hackathon-cluster \
+          --service agentleague-hackathon-backend \
+          --task-definition "$NEW_TASK_ARN" \
+          --force-new-deployment \
+          --region ${{ env.AWS_REGION }}
+
+        echo "✅ ECS backend service update initiated with AgentCore ARN"
+
+    - name: Wait for ECS service to stabilize
+      run: |
+        echo "⏳ Waiting for ECS service to stabilize..."
+        aws ecs wait services-stable \
+          --cluster agentleague-hackathon-cluster \
+          --services agentleague-hackathon-backend \
+          --region ${{ env.AWS_REGION }}
+        echo "✅ ECS service is stable"
+
+    - name: Deployment summary
+      run: |
+        echo "🎉 Deployment complete!"
+        echo "Frontend URL: https://app.hackathon.agentleague.ai"
+        echo "Backend URL: https://api.hackathon.agentleague.ai"
+        echo "Environment: ${{ env.ENVIRONMENT }}"
+

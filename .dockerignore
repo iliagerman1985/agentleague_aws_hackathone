@@ -1,0 +1,12 @@
+.git/
+.github/
+terraform/
+tests/
+**/__pycache__/
+node_modules/
+dist/
+build/
+.vscode/
+*.log
+.DS_Store
+

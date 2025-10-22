@@ -1,0 +1,58 @@
+[project]
+name = "agentleague_monorepo"
+description = "AgentLeague Monorepo"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "api",
+    "common",
+    "shared_db",
+    "game",
+    "backend",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.12.7",
+    "pyright>=1.1.403",
+    "pre-commit>=4.2.0",
+    "pytest>=8.4.1",
+    "pytest-asyncio>=0.24.0",
+    "pytest-env>=1.1.5",
+    "pytest-xdist[psutil]>=3.8.0",
+    "httpx>=0.28.1",
+    "coverage>=7.10.1",
+    "aiosqlite>=0.21.0",
+    "awscli-local[ver1]>=0.22.2",
+]
+
+[tool.uv.sources]
+api = { workspace = true }
+common = { workspace = true }
+shared_db = { workspace = true }
+game = { workspace = true }
+backend = { workspace = true }
+
+[tool.uv.workspace]
+members = ["libs/*/", "backend"]
+
+[tool.uv]
+package = false
+cache-dir = ".cache"
+
+[tool.pytest.ini_options]
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning"
+]
+testpaths = ["tests"]
+
+[tool.pytest_env]
+ENVIRONMENT = "unit_test"
+
+[tool.pyright]
+pythonVersion = "3.13"
+typeCheckingMode = "basic"
+reportMissingImports = true
+reportMissingTypeStubs = false

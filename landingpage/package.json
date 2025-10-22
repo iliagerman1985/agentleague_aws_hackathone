@@ -1,0 +1,17 @@
+{
+  "name": "agent-arena-landing",
+  "version": "1.0.0",
+  "description": "Agent League Landing Page",
+  "main": "index.html",
+  "scripts": {
+    "build-css": "tailwindcss -i ./src/input.css -o ./dist/output.css --watch",
+    "build": "tailwindcss -i ./src/input.css -o ./dist/output.css --minify",
+    "dev": "tailwindcss -i ./src/input.css -o ./dist/output.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  },
+  "keywords": ["ai", "poker", "agents", "competition"],
+  "author": "Agent League Team",
+  "license": "MIT"
+}

@@ -1,0 +1,121 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --primary-color: #0cf2cc;
+    --background-color: #121212;
+    --text-primary: #E0E0E0;
+    --text-secondary: #A0A0A0;
+    --accent-color: #0cf2cc;
+    --card-background: #1E1E1E;
+    --button-primary-hover: #09c2a3;
+  }
+
+  body {
+    font-family: 'Space Grotesk', sans-serif;
+    background-color: var(--background-color);
+    color: var(--text-primary);
+  }
+}
+
+@layer components {
+  .button_primary {
+    @apply bg-[var(--primary-color)] text-[var(--background-color)] rounded-full px-6 py-3 font-bold hover:bg-[var(--button-primary-hover)] transition duration-200;
+  }
+
+  .button_secondary {
+    @apply bg-transparent border border-[var(--primary-color)] text-[var(--primary-color)] rounded-full px-6 py-3 font-bold hover:bg-[var(--primary-color)] hover:text-[var(--background-color)] transition duration-200;
+  }
+
+  .typography_h1 {
+    @apply text-4xl font-bold text-[var(--text-primary)] mb-4;
+  }
+
+  .typography_h2 {
+    @apply text-3xl font-semibold text-[var(--text-primary)] mb-3;
+  }
+
+  .typography_body {
+    @apply text-[var(--text-secondary)] leading-relaxed;
+  }
+
+  .hover-lift {
+    @apply transition-all duration-300;
+  }
+
+  .hover-lift:hover {
+    @apply -translate-y-2 shadow-2xl;
+  }
+
+  .gradient-text {
+    background: linear-gradient(45deg, #0cf2cc, #00d4ff, #0099ff);
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: gradientShift 3s ease infinite;
+  }
+
+  .card-hover {
+    @apply transition-all duration-300 relative overflow-hidden;
+  }
+
+  .card-hover::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(12, 242, 204, 0.1), transparent);
+    transition: left 0.5s;
+  }
+
+  .card-hover:hover::before {
+    left: 100%;
+  }
+
+  .stagger-animation {
+    @apply opacity-0 translate-y-8;
+  }
+
+  .stagger-animation.animate {
+    @apply opacity-100 translate-y-0 transition-all duration-700 ease-out;
+  }
+}
+
+@layer utilities {
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite;
+  }
+
+  .animate-slide-up {
+    animation: slideInUp 0.8s ease-out forwards;
+  }
+
+  .animate-slide-left {
+    animation: slideInLeft 0.8s ease-out forwards;
+  }
+
+  .animate-slide-right {
+    animation: slideInRight 0.8s ease-out forwards;
+  }
+
+  .animate-pulse-custom {
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .animate-rotate {
+    animation: rotate 20s linear infinite;
+  }
+
+  .animate-fade-scale {
+    animation: fadeInScale 0.6s ease-out forwards;
+  }
+}

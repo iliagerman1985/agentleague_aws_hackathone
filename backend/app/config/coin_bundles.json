@@ -1,0 +1,32 @@
+{
+  "bundles": [
+    {
+      "id": "tokens_500",
+      "name": "500 Tokens",
+      "coins": 500,
+      "currency": "usd",
+      "amount_cents": 799,
+      "price_id": "prod_T2bjvkq9LadpCI",
+      "payment_link_url": "https://buy.stripe.com/test_3cI5kw9Ys5gE9Mq8mp6J201"
+    },
+    {
+      "id": "tokens_1200",
+      "name": "1000 Tokens",
+      "coins": 1000,
+      "currency": "usd",
+      "amount_cents": 1599,
+      "price_id": "prod_T2bjYlIIrl57oJ",
+      "payment_link_url": "https://buy.stripe.com/test_fZu8wI2w0cJ64s6eKN6J202"
+    },
+    {
+      "id": "tokens_2500",
+      "name": "2500 Tokens",
+      "coins": 2500,
+      "currency": "usd",
+      "amount_cents": 2999,
+      "price_id": "prod_T2bjeoIweqHJsH",
+      "payment_link_url": "https://buy.stripe.com/test_4gM4gsdaEeRe5wa4696J203"
+    }
+  ]
+}
+

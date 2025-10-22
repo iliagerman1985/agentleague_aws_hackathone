@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/
+
+# Test files and results
+test-results/
+playwright-report/
+coverage/
+*.spec.ts
+*.test.ts
+tests/
+
+# Development files
+.vscode/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+!README.md
+
+# Config files that aren't needed in container
+playwright.config.ts
+playwright.*.config.ts
+tsconfig.test.tsbuildinfo
+vite.config.ts.timestamp-*
+
+# Scripts
+scripts/
+playwright-with-servers.sh

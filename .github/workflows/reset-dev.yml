@@ -1,0 +1,270 @@
+name: Reset Dev Environment Database
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "RESET" to confirm database wipe'
+        required: true
+        type: string
+
+env:
+  AWS_REGION: us-east-1
+  PROJECT_NAME: agentleague
+
+concurrency:
+  group: reset-dev
+  cancel-in-progress: false
+
+permissions:
+  id-token: write   # This is required for requesting the JWT
+  contents: read    # This is required for actions/checkout
+
+jobs:
+  reset-database:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Validate confirmation
+      run: |
+        if [ "${{ github.event.inputs.confirm }}" != "RESET" ]; then
+          echo "❌ Confirmation failed. You must type 'RESET' to proceed."
+          exit 1
+        fi
+        echo "✅ Confirmation validated. Proceeding with database reset..."
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install/Update AWS CLI to latest version
+      run: |
+        echo "Updating AWS CLI to latest version..."
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+        unzip awscliv2.zip
+        sudo ./aws/install --update
+        aws --version
+        
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::619403130674:role/github
+        role-session-name: GitHub_to_AWS_via_FederatedOIDC
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Verify AWS authentication
+      run: |
+        echo "Verifying AWS authentication..."
+        aws sts get-caller-identity
+        echo "AWS authentication successful!"
+        echo "AWS CLI version:"
+        aws --version
+
+    - name: Get EC2 instance IP
+      id: get-instance
+      run: |
+        INSTANCE_IP=$(aws ec2 describe-instances \
+          --filters "Name=tag:Name,Values=${{ env.PROJECT_NAME }}-*instance*" "Name=instance-state-name,Values=running" \
+          --query 'Reservations[0].Instances[0].PublicIpAddress' \
+          --output text)
+        echo "instance-ip=$INSTANCE_IP" >> $GITHUB_OUTPUT
+        echo "Found EC2 instance: $INSTANCE_IP"
+
+    - name: Reset database
+      env:
+        INSTANCE_IP: ${{ steps.get-instance.outputs.instance-ip }}
+      run: |
+        echo "🔥 Starting database reset on EC2 instance: $INSTANCE_IP"
+        echo "⚠️  WARNING: This will completely wipe the database!"
+
+        # Setup SSH key from repo
+        chmod 600 terraform/dev.pem
+
+        # Create SSH directory and add instance to known hosts
+        mkdir -p ~/.ssh
+        ssh-keyscan -H $INSTANCE_IP >> ~/.ssh/known_hosts
+
+        # Execute database reset via SSH
+        ssh -i terraform/dev.pem -o StrictHostKeyChecking=no ubuntu@$INSTANCE_IP << 'RESET_EOF'
+          set -e
+          echo "🔥 Starting database reset..."
+
+          # Stop all application containers
+          echo "🛑 Stopping all application containers..."
+          cd /opt/app 2>/dev/null || true
+          sudo docker-compose -f docker-compose.aws.yml stop 2>/dev/null || true
+          cd /home/ubuntu 2>/dev/null || true
+
+          # Stop all containers
+          echo "🛑 Stopping all containers..."
+          cd /opt/app
+          if [ -f "docker-compose.aws.yml" ]; then
+            sudo docker-compose -p agentleague -f docker-compose.aws.yml down 2>/dev/null || true
+            echo "✅ All containers stopped and removed"
+          fi
+
+          # Wipe the database data directory completely
+          echo "🧹 Wiping database data directory..."
+          if [ -d "/mnt/pgdata" ]; then
+            echo "Found /mnt/pgdata, removing all contents..."
+            sudo rm -rf /mnt/pgdata/*
+            sudo rm -rf /mnt/pgdata/.[!.]*
+            echo "✅ Database data directory wiped"
+          else
+            echo "ℹ️  /mnt/pgdata directory does not exist, creating it..."
+            sudo mkdir -p /mnt/pgdata
+            sudo chmod 777 /mnt/pgdata
+          fi
+
+          # Verify the directory is empty
+          echo "🔍 Verifying database directory is empty..."
+          CONTENTS=$(sudo ls -A /mnt/pgdata 2>/dev/null || true)
+          if [ -z "$CONTENTS" ]; then
+            echo "✅ Database directory is empty"
+          else
+            echo "⚠️  Warning: Database directory still contains files:"
+            sudo ls -la /mnt/pgdata
+            echo "Forcing removal..."
+            sudo rm -rf /mnt/pgdata
+            sudo mkdir -p /mnt/pgdata
+            sudo chmod 777 /mnt/pgdata
+          fi
+
+          # Remove any orphaned database volumes
+          echo "🗑️  Removing database volumes..."
+          sudo docker volume ls | grep -E "(postgres|database)" | awk '{print $2}' | xargs -r sudo docker volume rm 2>/dev/null || true
+          echo "✅ Database volumes removed"
+
+          # Restart the entire stack - this will create a fresh database
+          echo "🚀 Restarting entire application stack..."
+          cd /opt/app
+          if [ -f "docker-compose.aws.yml" ]; then
+            sudo docker-compose -p agentleague -f docker-compose.aws.yml up -d
+            echo "✅ Application stack restarted"
+          else
+            echo "⚠️  docker-compose.aws.yml not found"
+            echo "You may need to run the deploy pipeline first"
+            exit 1
+          fi
+
+          echo "🎉 Database reset completed successfully!"
+          echo "The backend will run migrations on startup to create a fresh schema."
+        RESET_EOF
+
+        echo "✅ Database reset completed at $(date)"
+
+    - name: Wait for services to start
+      env:
+        INSTANCE_IP: ${{ steps.get-instance.outputs.instance-ip }}
+      run: |
+        echo "⏳ Waiting for services to fully start and migrations to complete (90 seconds)..."
+        sleep 90
+
+        echo "🔍 Checking service status..."
+        chmod 600 terraform/dev.pem
+        ssh -i terraform/dev.pem -o StrictHostKeyChecking=no ubuntu@${{ steps.get-instance.outputs.instance-ip }} << 'STATUS_EOF'
+          echo "📊 Container Status:"
+          sudo docker ps -a
+
+          echo ""
+          echo "🔍 Container Health Checks:"
+          for container in agentleague-backend agentleague-frontend agentleague-postgres; do
+            if sudo docker ps --filter "name=$container" --format "table {{.Names}}\t{{.Status}}" | grep -q "$container"; then
+              status=$(sudo docker ps --filter "name=$container" --format "{{.Status}}")
+              echo "$container: $status"
+            else
+              echo "❌ $container: Not found"
+            fi
+          done
+
+          echo ""
+          echo "🗄️  Database Status:"
+          if sudo docker exec agentleague-postgres pg_isready -U postgres 2>/dev/null; then
+            echo "✅ Database is ready"
+          else
+            echo "⚠️  Database is not ready yet"
+          fi
+        STATUS_EOF
+
+    - name: Verify deployment
+      env:
+        DOMAIN_NAME: app.dev.agentleague.app
+      run: |
+        echo "🔍 Verifying application is accessible..."
+
+        # Function to check endpoint with retries
+        check_endpoint() {
+          local url=$1
+          local name=$2
+          local max_attempts=5
+          local attempt=1
+
+          while [ $attempt -le $max_attempts ]; do
+            echo "Checking $name (attempt $attempt/$max_attempts)..."
+            if curl -f -s --connect-timeout 15 --max-time 45 "$url" > /dev/null; then
+              echo "✅ $name is healthy"
+              return 0
+            else
+              echo "⚠️  $name check failed, retrying in 20 seconds..."
+              sleep 20
+              ((attempt++))
+            fi
+          done
+
+          echo "❌ $name failed after $max_attempts attempts"
+          return 1
+        }
+
+        # Check backend health
+        if check_endpoint "https://$DOMAIN_NAME/api/v1/health" "Backend API"; then
+          echo "✅ Backend is accessible"
+        else
+          echo "⚠️  Backend health check failed (this may be normal if the app is still initializing)"
+        fi
+
+        # Check frontend
+        if check_endpoint "https://$DOMAIN_NAME/" "Frontend"; then
+          echo "✅ Frontend is accessible"
+        else
+          echo "⚠️  Frontend health check failed (this may be normal if the app is still initializing)"
+        fi
+
+        echo "✅ Reset verification completed"
+
+    - name: Print container logs on failure
+      if: failure()
+      env:
+        INSTANCE_IP: ${{ steps.get-instance.outputs.instance-ip }}
+      run: |
+        echo "🧪 Reset failed — collecting container logs..."
+        chmod 600 terraform/dev.pem
+        ssh -i terraform/dev.pem -o StrictHostKeyChecking=no ubuntu@$INSTANCE_IP << 'LOGS_EOF'
+          echo "📊 docker ps -a:"
+          sudo docker ps -a || true
+
+          echo ""
+          echo "📦 docker-compose ps:"
+          cd /opt/app && sudo docker-compose -f docker-compose.aws.yml ps || true
+
+          echo ""
+          echo "🧾 docker-compose logs (tail 300):"
+          sudo docker-compose -f docker-compose.aws.yml logs --tail=300 || true
+
+          echo ""
+          for c in agentleague-backend agentleague-frontend agentleague-postgres; do
+            echo "===== Logs: $c (tail 200) ====="
+            sudo docker logs --tail=200 "$c" 2>&1 || echo "No logs for $c"
+            echo ""
+          done
+        LOGS_EOF
+
+    - name: Notify reset status
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ Database reset successful!"
+          echo "The application has been restarted with a fresh database."
+        else
+          echo "❌ Database reset failed!"
+          echo "Please check the logs above for details."
+        fi
+

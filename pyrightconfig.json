@@ -1,0 +1,29 @@
+{
+  "pythonVersion": "3.13",
+  "venvPath": ".",
+  "venv": ".venv",
+  "typeCheckingMode": "strict",
+  "deprecateTypingAliases": true,
+  "reportCallInDefaultInitializer": "none",
+  "reportImplicitOverride": "none",
+  "reportImplicitStringConcatenation": "none",
+  "reportImportCycles": "error",
+  "reportMissingSuperCall": "none",
+  "reportPropertyTypeMismatch": "error",
+  "reportShadowedImports": "error",
+  "reportUninitializedInstanceVariable": "error",
+  "reportUnnecessaryTypeIgnoreComment": "error",
+  "reportUnusedCallResult": "information",
+  "reportUnknownMemberType": "error",
+  "reportUnknownArgumentType": "error",
+  "reportUnknownParameterType": "error",
+  "reportUnknownVariableType": "none",
+  "reportMissingTypeStubs": "none",
+  "reportIncompatibleVariableOverride": "none",
+  "extraPaths": [
+    "backend",
+    "libs/common",
+    "libs/shared_db",
+    "libs/game"
+  ]
+}

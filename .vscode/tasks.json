@@ -1,0 +1,96 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Start Vite Dev Server",
+            "type": "shell",
+            "command": "cd ${workspaceFolder}/client && npm run dev",
+            "isBackground": true,
+            "problemMatcher": {
+                "owner": "custom",
+                "pattern": {
+                    "regexp": "^$"
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": ".*VITE.*",
+                    "endsPattern": ".*ready in.*"
+                }
+            }
+        },
+        {
+            "label": "Start Backend Server",
+            "type": "shell",
+            "command": "cd ${workspaceFolder}/backend && uvicorn app.main:app --host 0.0.0.0 --port 9998 --reload",
+            "isBackground": true,
+            "problemMatcher": {
+                "owner": "custom",
+                "pattern": {
+                    "regexp": "^$"
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": ".*INFO.*",
+                    "endsPattern": ".*Application startup complete.*"
+                }
+            }
+        },
+
+        {
+            "label": "Start Test Servers (E2E)",
+            "type": "shell",
+            "command": "just start-test-servers",
+            "isBackground": true,
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "group": "test"
+            },
+            "problemMatcher": {
+                "owner": "custom",
+                "pattern": {
+                    "regexp": "^$"
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": ".*Starting.*",
+                    "endsPattern": ".*Test servers are running.*"
+                }
+            }
+        },
+        {
+            "label": "Stop Test Servers (E2E)",
+            "type": "shell",
+            "command": "just stop-test-servers",
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "group": "test"
+            }
+        },
+        {
+            "label": "Run E2E Tests (All)",
+            "type": "shell",
+            "command": "just test-e2e all",
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "group": "test"
+            }
+        },
+        {
+            "label": "Run E2E Tests (Regression)",
+            "type": "shell",
+            "command": "just test-e2e regression",
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "group": "test"
+            }
+        }
+    ]
+}

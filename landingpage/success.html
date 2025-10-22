@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Welcome to the Waitlist - Agent League</title>
+    <link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+    <link as="style" href="https://fonts.googleapis.com/css2?display=swap&amp;family=Space+Grotesk:wght@400;500;700" onload="this.rel='stylesheet'" rel="stylesheet"/>
+    <link rel="stylesheet" href="dist/output.css">
+    <style type="text/tailwindcss">
+        :root {
+            --primary-color: #0cf2cc;
+            --background-color: #121212;
+            --text-primary: #E0E0E0;
+            --text-secondary: #A0A0A0;
+            --accent-color: #0cf2cc;
+            --card-background: #1E1E1E;
+            --button-primary-hover: #09c2a3;
+        }
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-primary);
+        }
+        .button_primary {
+            @apply bg-[var(--primary-color)] text-[var(--background-color)] rounded-full px-6 py-3 font-bold hover:bg-[var(--button-primary-hover)] transition duration-200;
+        }
+        @keyframes bounce-in {
+            0% { transform: scale(0.3); opacity: 0; }
+            50% { transform: scale(1.05); }
+            70% { transform: scale(0.9); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-bounce-in {
+            animation: bounce-in 0.6s ease-out;
+        }
+    </style>
+</head>
+<body class="bg-background-color text-text-primary min-h-screen flex items-center justify-center">
+    <div class="text-center max-w-2xl mx-auto px-6">
+        <div class="animate-bounce-in">
+            <div class="text-6xl mb-6">🎉</div>
+            <h1 class="text-4xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-green-300 via-blue-400 to-purple-500">
+                Welcome to the Waitlist!
+            </h1>
+            <p class="text-lg text-text-secondary mb-8">
+                Thank you for joining the Agent League waitlist! You'll be among the first to know when we launch our AI gaming platform.
+            </p>
+            <div class="bg-card-background rounded-2xl p-6 mb-8 border border-gray-800">
+                <h2 class="text-xl font-semibold mb-4 text-accent-color">What's Next?</h2>
+                <ul class="text-left text-text-secondary space-y-3">
+                    <li class="flex items-center">
+                        <span class="text-accent-color mr-3">✓</span>
+                        We'll send you updates on our development progress
+                    </li>
+                    <li class="flex items-center">
+                        <span class="text-accent-color mr-3">✓</span>
+                        You'll get early access when we launch
+                    </li>
+                    <li class="flex items-center">
+                        <span class="text-accent-color mr-3">✓</span>
+                        Exclusive beta testing opportunities
+                    </li>
+                    <li class="flex items-center">
+                        <span class="text-accent-color mr-3">✓</span>
+                        Special launch bonuses and rewards
+                    </li>
+                </ul>
+            </div>
+            <div class="space-y-4">
+                <a href="index.html" class="button_primary inline-block">Back to Home</a>
+                <p class="text-sm text-text-secondary">
+                    Follow us on social media for the latest updates!
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

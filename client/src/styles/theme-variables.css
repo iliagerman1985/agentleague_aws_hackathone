@@ -1,0 +1,236 @@
+/**
+ * Centralized CSS Variables for Theme
+ * Import this file to use consistent theme variables
+ */
+
+:root {
+  /* Dynamic Color Scheme Variables - Override these via JS */
+  --color-scheme-primary: #0891B2;
+  --color-scheme-accent: #EA580C;
+
+  /* Dark Gaming Theme Brand Colors - Based on screenshots */
+  --brand-primary-red: var(--color-scheme-primary, #E53E3E);        /* Primary color from scheme */
+  --brand-card-blue: #2D3748;          /* Medium blue for cards */
+  --brand-dark-blue: #1A202C;          /* Dark blue for sidebar/secondary */
+  --brand-navy: #171923;               /* Very dark navy for main background */
+  --brand-teal: var(--color-scheme-accent, #38B2AC);               /* Accent color from scheme */
+  --brand-success: #48BB78;            /* Green for success states */
+  --brand-warning: #ED8936;            /* Orange for warnings */
+  --brand-text-light: #F7FAFC;         /* Light text */
+  --brand-text-muted: #A0AEC0;         /* Muted text */
+
+  /* Legacy brand colors for compatibility */
+  --brand-orange: var(--color-scheme-primary, #E53E3E);             /* Map to primary color */
+  --brand-mint: #48BB78;               /* Map to success green */
+  --brand-cyan: var(--color-scheme-accent, #38B2AC);               /* Map to accent color */
+  --brand-purple: #805AD5;             /* Purple accent */
+  --brand-amber: #ED8936;              /* Amber/warning */
+  --brand-slate: #4A5568;              /* Slate gray */
+  --brand-light-blue: #2D3748;         /* Map to card blue */
+  --brand-warm-gray: #2D3748;          /* Map to card blue */
+
+  /* Logo global controls */
+  --logo-color-scheme: none; /* accepted values: primary | dark | white | none */
+  --logo-primary-filter: brightness(0) saturate(100%) invert(28%) sepia(77%) saturate(3323%) hue-rotate(348deg) brightness(94%) contrast(104%);
+
+  /* Brand Colors with Opacity - Primary (Dynamic) */
+  --brand-primary-10: color-mix(in srgb, var(--color-scheme-primary) 10%, transparent);
+  --brand-primary-20: color-mix(in srgb, var(--color-scheme-primary) 20%, transparent);
+  --brand-primary-30: color-mix(in srgb, var(--color-scheme-primary) 30%, transparent);
+  --brand-primary-40: color-mix(in srgb, var(--color-scheme-primary) 40%, transparent);
+  --brand-primary-50: color-mix(in srgb, var(--color-scheme-primary) 50%, transparent);
+  --brand-primary-60: color-mix(in srgb, var(--color-scheme-primary) 60%, transparent);
+  --brand-primary-70: color-mix(in srgb, var(--color-scheme-primary) 70%, transparent);
+  --brand-primary-80: color-mix(in srgb, var(--color-scheme-primary) 80%, transparent);
+  --brand-primary-90: color-mix(in srgb, var(--color-scheme-primary) 90%, transparent);
+
+  /* Brand Colors with Opacity - Accent (Dynamic) */
+  --brand-accent-10: color-mix(in srgb, var(--color-scheme-accent) 10%, transparent);
+  --brand-accent-20: color-mix(in srgb, var(--color-scheme-accent) 20%, transparent);
+  --brand-accent-30: color-mix(in srgb, var(--color-scheme-accent) 30%, transparent);
+  --brand-accent-40: color-mix(in srgb, var(--color-scheme-accent) 40%, transparent);
+  --brand-accent-50: color-mix(in srgb, var(--color-scheme-accent) 50%, transparent);
+  --brand-accent-60: color-mix(in srgb, var(--color-scheme-accent) 60%, transparent);
+  --brand-accent-70: color-mix(in srgb, var(--color-scheme-accent) 70%, transparent);
+  --brand-accent-80: color-mix(in srgb, var(--color-scheme-accent) 80%, transparent);
+  --brand-accent-90: color-mix(in srgb, var(--color-scheme-accent) 90%, transparent);
+
+  /* Brand Colors with Opacity - Teal (Legacy, fallback to accent) */
+  --brand-teal-10: var(--brand-accent-10);
+  --brand-teal-20: var(--brand-accent-20);
+  --brand-teal-30: var(--brand-accent-30);
+  --brand-teal-40: var(--brand-accent-40);
+  --brand-teal-50: var(--brand-accent-50);
+  --brand-teal-60: var(--brand-accent-60);
+  --brand-teal-70: var(--brand-accent-70);
+  --brand-teal-80: var(--brand-accent-80);
+  --brand-teal-90: var(--brand-accent-90);
+
+  /* Brand Colors with Opacity - Primary Red (Legacy, fallback to primary) */
+  --brand-orange-10: var(--brand-primary-10);
+  --brand-orange-20: var(--brand-primary-20);
+  --brand-orange-30: var(--brand-primary-30);
+  --brand-orange-40: var(--brand-primary-40);
+  --brand-orange-50: var(--brand-primary-50);
+  --brand-orange-60: var(--brand-primary-60);
+  --brand-orange-70: var(--brand-primary-70);
+  --brand-orange-80: var(--brand-primary-80);
+  --brand-orange-90: var(--brand-primary-90);
+
+  /* Brand Colors with Opacity - Mint */
+  --brand-mint-10: rgba(5, 150, 105, 0.1);
+  --brand-mint-20: rgba(5, 150, 105, 0.2);
+  --brand-mint-30: rgba(5, 150, 105, 0.3);
+  --brand-mint-40: rgba(5, 150, 105, 0.4);
+  --brand-mint-50: rgba(5, 150, 105, 0.5);
+  --brand-mint-60: rgba(5, 150, 105, 0.6);
+  --brand-mint-70: rgba(5, 150, 105, 0.7);
+  --brand-mint-80: rgba(5, 150, 105, 0.8);
+  --brand-mint-90: rgba(5, 150, 105, 0.9);
+
+  /* Brand Colors with Opacity - Purple */
+  --brand-purple-10: rgba(124, 58, 237, 0.1);
+  --brand-purple-20: rgba(124, 58, 237, 0.2);
+  --brand-purple-30: rgba(124, 58, 237, 0.3);
+  --brand-purple-40: rgba(124, 58, 237, 0.4);
+  --brand-purple-50: rgba(124, 58, 237, 0.5);
+  --brand-purple-60: rgba(124, 58, 237, 0.6);
+  --brand-purple-70: rgba(124, 58, 237, 0.7);
+  --brand-purple-80: rgba(124, 58, 237, 0.8);
+  --brand-purple-90: rgba(124, 58, 237, 0.9);
+
+  /* Brand Colors with Opacity - Cyan */
+  --brand-cyan-10: rgba(14, 116, 144, 0.1);
+  --brand-cyan-20: rgba(14, 116, 144, 0.2);
+  --brand-cyan-30: rgba(14, 116, 144, 0.3);
+  --brand-cyan-40: rgba(14, 116, 144, 0.4);
+  --brand-cyan-50: rgba(14, 116, 144, 0.5);
+  --brand-cyan-60: rgba(14, 116, 144, 0.6);
+  --brand-cyan-70: rgba(14, 116, 144, 0.7);
+  --brand-cyan-80: rgba(14, 116, 144, 0.8);
+  --brand-cyan-90: rgba(14, 116, 144, 0.9);
+
+  /* Brand Colors with Opacity - Amber */
+  --brand-amber-10: rgba(217, 119, 6, 0.1);
+  --brand-amber-20: rgba(217, 119, 6, 0.2);
+  --brand-amber-30: rgba(217, 119, 6, 0.3);
+  --brand-amber-40: rgba(217, 119, 6, 0.4);
+  --brand-amber-50: rgba(217, 119, 6, 0.5);
+  --brand-amber-60: rgba(217, 119, 6, 0.6);
+  --brand-amber-70: rgba(217, 119, 6, 0.7);
+  --brand-amber-80: rgba(217, 119, 6, 0.8);
+  --brand-amber-90: rgba(217, 119, 6, 0.9);
+
+  /* Animation Colors - Logo */
+  --logo-glow-primary: var(--brand-primary-red);
+  --logo-glow-secondary: var(--brand-teal);
+  --logo-flash-primary: var(--brand-primary-red);
+  --logo-flash-secondary: var(--brand-teal);
+  --logo-flash-tertiary: var(--brand-purple);
+  --logo-pulse-primary: var(--brand-primary-red);
+  --logo-pulse-secondary: var(--brand-teal);
+  --logo-pulse-tertiary: var(--brand-success);
+
+  /* Animation Colors - Background */
+  --bg-star-color-1: var(--brand-primary-red);
+  --bg-star-color-2: var(--brand-teal);
+  --bg-star-color-3: var(--brand-success);
+  --bg-star-color-4: var(--brand-purple);
+  --bg-star-color-5: var(--brand-cyan);
+  --bg-star-color-6: var(--brand-warning);
+
+  --bg-smoke-color-1: rgba(229, 62, 62, 0.3);
+  --bg-smoke-color-2: rgba(56, 178, 172, 0.25);
+  --bg-smoke-color-3: rgba(72, 187, 120, 0.2);
+  --bg-smoke-color-4: rgba(128, 90, 213, 0.15);
+  --bg-smoke-color-5: rgba(56, 178, 172, 0.25);
+  --bg-smoke-color-6: rgba(237, 137, 54, 0.2);
+
+  /* Lightning Gradient */
+  --logo-lightning-gradient: linear-gradient(
+    120deg,
+    rgba(229, 62, 62, 0.1) 0%,
+    rgba(229, 62, 62, 0.8) 25%,
+    rgba(56, 178, 172, 0.6) 45%,
+    rgba(128, 90, 213, 0.4) 50%,
+    rgba(72, 187, 120, 0.3) 65%,
+    rgba(229, 62, 62, 0.1) 100%
+  );
+
+  /* Semantic Colors */
+  --color-success: var(--brand-mint);
+  --color-warning: var(--brand-amber);
+  --color-error: #DC2626;
+  --color-info: var(--brand-teal);
+
+  /* Animation Timing */
+  --animation-logo-min: 3000ms;
+  --animation-logo-max: 6000ms;
+  --animation-bg-star-min: 2000ms;
+  --animation-bg-star-max: 5000ms;
+  --animation-bg-smoke-min: 4000ms;
+  --animation-bg-smoke-max: 8000ms;
+}
+
+/* Dark theme override for logo color (primary teal) */
+.dark {
+  --logo-primary-filter: brightness(0) saturate(100%) invert(51%) sepia(89%) saturate(1178%) hue-rotate(161deg) brightness(94%) contrast(95%);
+}
+
+
+/* Utility classes for easy theme usage */
+.theme-bg-primary { background-color: var(--brand-primary-red); }
+.theme-bg-accent { background-color: var(--color-scheme-accent); }
+.theme-bg-success { background-color: var(--brand-success); }
+
+.theme-text-primary { color: var(--brand-primary-red); }
+.theme-text-accent { color: var(--color-scheme-accent); }
+.theme-text-success { color: var(--brand-success); }
+
+.theme-border-primary { border-color: var(--brand-primary-red); }
+.theme-border-accent { border-color: var(--color-scheme-accent); }
+.theme-border-success { border-color: var(--brand-success); }
+
+/* Button theme variants */
+.theme-btn-primary {
+  background-color: var(--brand-primary-red);
+  color: white;
+}
+.theme-btn-primary:hover {
+  background-color: var(--brand-teal);
+}
+
+.theme-btn-accent {
+  background-color: var(--color-scheme-accent);
+  color: white;
+}
+.theme-btn-accent:hover {
+  background-color: color-mix(in srgb, var(--color-scheme-accent) 85%, black);
+}
+
+.theme-btn-success {
+  background-color: var(--brand-mint);
+  color: white;
+}
+.theme-btn-success:hover {
+  background-color: #047857; /* emerald-700 */
+}
+
+
+/* Outline and Ghost button variants using theme variables */
+.theme-btn-outline {
+  border: 1px solid var(--color-scheme-accent);
+  color: var(--color-scheme-accent);
+  background-color: transparent;
+}
+.theme-btn-outline:hover {
+  background-color: var(--brand-accent-10);
+}
+
+.theme-btn-ghost {
+  color: var(--color-scheme-accent);
+  background-color: transparent;
+}
+.theme-btn-ghost:hover {
+  background-color: var(--brand-accent-10);
+}

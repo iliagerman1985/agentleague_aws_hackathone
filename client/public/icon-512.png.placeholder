@@ -1,0 +1,14 @@
+# Placeholder for icon-512.png
+# This should be a 512x512 pixel PNG image of your app icon
+# Used for PWA (Progressive Web App) installations and high-resolution displays
+# 
+# To create this file:
+# 1. Design your app icon (square format recommended)
+# 2. Export as PNG at 512x512 pixels
+# 3. Rename this file from icon-512.png.placeholder to icon-512.png
+# 4. Replace this text file with your actual PNG image
+#
+# You can use the icon.svg as a base and convert it to PNG using:
+# - Online converters like https://convertio.co/svg-png/
+# - Design tools like Figma, Sketch, or Adobe Illustrator
+# - Command line tools like Inkscape: inkscape icon.svg -w 512 -h 512 -o icon-512.png

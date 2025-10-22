@@ -1,0 +1,106 @@
+{
+  "cSpell.words": [
+    "Accum",
+    "acompletion",
+    "agentcore",
+    "Autogen",
+    "autoremove",
+    "awscliv",
+    "buildkitd",
+    "Buildx",
+    "Callsite",
+    "cand",
+    "Catan",
+    "centipawn",
+    "centipawns",
+    "chebyshev",
+    "envsubst",
+    "fernet",
+    "Foldface",
+    "Foldy",
+    "fullmove",
+    "gilp",
+    "gilpali",
+    "hackathon",
+    "halfmove",
+    "healthcheck",
+    "holdem",
+    "hostnames",
+    "idempotently",
+    "isready",
+    "journalctl",
+    "kimi",
+    "krang",
+    "Krasik",
+    "Lexend",
+    "lezer",
+    "litellm",
+    "Middlegame",
+    "midgame",
+    "notif",
+    "Nppb",
+    "ondelete",
+    "ondemand",
+    "pbppq",
+    "pipefail",
+    "postflop",
+    "preflop",
+    "pychess",
+    "queenside",
+    "referer",
+    "retryable",
+    "scrollarea",
+    "selectinload",
+    "sensei",
+    "sess",
+    "shredder",
+    "spectatable",
+    "spectatorship",
+    "stockfish",
+    "subclassing",
+    "titleize",
+    "tsid",
+    "unmatch",
+    "unrepr",
+    "whsec",
+    "winrate",
+    "wrongpassword",
+    "yevgeny"
+  ],
+  "python.testing.pytestArgs": [
+    "tests",
+    "-vv"
+  ],
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true,
+
+    // Terminal settings for better just command integration
+    "terminal.integrated.cwd": "${workspaceFolder}",
+
+    // File associations
+    "files.associations": {
+        "justfile": "makefile",
+        "Justfile": "makefile"
+    },
+
+    // Playwright extension configuration
+    "playwright.testDir": "./client/tests/integration",
+    "playwright.configFile": "./client/playwright.config.ts",
+    "playwright.workingDir": "./client",
+
+    // CSS settings for Tailwind CSS
+    "css.validate": false,
+    "less.validate": false,
+    "scss.validate": false,
+
+    // Tailwind CSS IntelliSense settings
+    "tailwindCSS.includeLanguages": {
+        "typescript": "typescript",
+        "typescriptreact": "typescriptreact"
+    },
+    "tailwindCSS.experimental.classRegex": [
+        ["cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"],
+        ["cx\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"]
+    ],
+    "postman.settings.dotenv-detection-notification-visibility": false
+}

@@ -1,0 +1,691 @@
+name: Deploy to AWS Dev Environment
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  PROJECT_NAME: agentleague
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: true
+
+permissions:
+
+  id-token: write   # This is required for requesting the JWT
+  contents: read    # This is required for actions/checkout
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install/Update AWS CLI to latest version
+      run: |
+        echo "Updating AWS CLI to latest version..."
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+        unzip awscliv2.zip
+        sudo ./aws/install --update
+        aws --version
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::619403130674:role/github
+        role-session-name: GitHub_to_AWS_via_FederatedOIDC
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Verify AWS authentication
+      run: |
+        echo "Verifying AWS authentication..."
+        aws sts get-caller-identity
+        echo "AWS authentication successful!"
+        echo "AWS CLI version:"
+        aws --version
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Get ECR repository URIs
+      id: ecr-repos
+      run: |
+        BACKEND_REPO=$(aws ecr describe-repositories --repository-names ${{ env.PROJECT_NAME }}-backend --query 'repositories[0].repositoryUri' --output text)
+        FRONTEND_REPO=$(aws ecr describe-repositories --repository-names ${{ env.PROJECT_NAME }}-frontend --query 'repositories[0].repositoryUri' --output text)
+        AGENTCORE_REPO=$(aws ecr describe-repositories --repository-names ${{ env.PROJECT_NAME }}-agentcore --query 'repositories[0].repositoryUri' --output text)
+        echo "backend-repo=$BACKEND_REPO" >> $GITHUB_OUTPUT
+        echo "frontend-repo=$FRONTEND_REPO" >> $GITHUB_OUTPUT
+        echo "agentcore-repo=$AGENTCORE_REPO" >> $GITHUB_OUTPUT
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      with:
+        driver-opts: |
+          network=host
+        buildkitd-flags: |
+          --allow-insecure-entitlement security.insecure
+          --allow-insecure-entitlement network.host
+
+    - name: Pre-warm cache by pulling existing images
+      continue-on-error: true
+      run: |
+        echo "🔥 Pre-warming cache by pulling existing images..."
+        docker pull ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-backend:latest || echo "Backend image not found, will build from scratch"
+        docker pull ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-frontend:latest || echo "Frontend image not found, will build from scratch"
+        docker pull ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-agentcore:latest || echo "AgentCore image not found, will build from scratch"
+        docker pull ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-backend:cache || echo "Backend cache not found"
+        docker pull ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-frontend:cache || echo "Frontend cache not found"
+        docker pull ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-agentcore:cache || echo "AgentCore cache not found"
+
+    - name: Build and push backend
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: backend/Dockerfile
+        platforms: linux/arm64
+        push: true
+        tags: |
+          ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-backend:${{ github.run_id }}
+          ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-backend:latest
+        cache-from: |
+          type=gha,scope=backend
+          type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-backend:cache
+        cache-to: |
+          type=gha,mode=max,scope=backend
+          type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-backend:cache,mode=max
+
+    - name: Build and push frontend
+      uses: docker/build-push-action@v5
+      with:
+        context: ./client
+        file: client/Dockerfile
+        platforms: linux/arm64
+        push: true
+        tags: |
+          ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-frontend:${{ github.run_id }}
+          ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-frontend:latest
+        cache-from: |
+          type=gha,scope=frontend
+          type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-frontend:cache
+        cache-to: |
+          type=gha,mode=max,scope=frontend
+          type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-frontend:cache,mode=max
+
+    - name: Build and push AgentCore
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: backend/Dockerfile.agentcore
+        platforms: linux/arm64
+        push: true
+        tags: |
+          ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-agentcore:${{ github.run_id }}
+          ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-agentcore:latest
+        cache-from: |
+          type=gha,scope=agentcore
+          type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-agentcore:cache
+        cache-to: |
+          type=gha,mode=max,scope=agentcore
+          type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-agentcore:cache,mode=max
+
+    - name: Deploy AgentCore to Bedrock AgentCore
+      id: deploy-agentcore
+      env:
+        AGENTCORE_REPO: ${{ steps.ecr-repos.outputs.agentcore-repo }}
+        IMAGE_TAG: ${{ github.run_id }}
+        AWS_REGION: ${{ env.AWS_REGION }}
+        PROJECT_NAME: ${{ env.PROJECT_NAME }}
+      run: |
+        set -euo pipefail
+        set -x
+        echo "🚀 Deploying AgentCore to Bedrock AgentCore..."
+
+        # Ensure CLI supports AgentCore
+        if ! aws bedrock-agentcore-control help >/dev/null 2>&1; then
+          echo "bedrock-agentcore-control not available in AWS CLI"; aws --version; exit 1
+        fi
+
+        # Set environment variables from repo .env file
+        export ENVIRONMENT=development
+        set -a
+        # Load per-environment config for AgentCore
+        if [ -f "libs/common/.env.${ENVIRONMENT}" ]; then
+          . "libs/common/.env.${ENVIRONMENT}"
+        elif [ -f "libs/common/.env.development" ]; then
+          . "libs/common/.env.development"
+        fi
+        set +a
+
+        # Resolve values from .env (fallbacks for backward-compat)
+        export RUNTIME_NAME="${AGENTCORE_RUNTIME_NAME:-agentleague-${ENVIRONMENT}-runtime}"
+        export REGION="${AGENTCORE_AWS_REGION:-${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}}"
+        export ECR_TAG="${AGENTCORE_REPO}:${IMAGE_TAG}"
+
+        echo "Environment: ${ENVIRONMENT}"
+        echo "Runtime Name: ${RUNTIME_NAME}"
+        echo "Image: ${ECR_TAG}"
+
+        # Delegate AgentCore upsert (role ensure + create/update) to script
+        chmod +x scripts/deploy-agentcore.sh
+        ./scripts/deploy-agentcore.sh ${IMAGE_TAG}
+
+    - name: Ensure secrets exist in AWS Secrets Manager
+      run: |
+        echo "🔐 Checking if secrets exist in AWS Secrets Manager..."
+        if ! aws secretsmanager describe-secret --secret-id "dev_secret" --region ${{ env.AWS_REGION }} &> /dev/null; then
+          echo "⚠️  Secrets not found, creating dev_secret..."
+          chmod +x scripts/create-dev-secret.sh
+          echo "y" | scripts/create-dev-secret.sh
+        else
+          echo "✅ Secret 'dev_secret' already exists"
+        fi
+
+    - name: Get EC2 instance IP
+      id: get-instance
+      run: |
+        # Get the EC2 instance IP with better error handling
+        INSTANCE_IP=$(aws ec2 describe-instances \
+          --filters "Name=tag:Name,Values=${{ env.PROJECT_NAME }}-*instance*" "Name=instance-state-name,Values=running" \
+          --query 'Reservations[0].Instances[0].PublicIpAddress' \
+          --output text 2>/dev/null || echo "")
+
+        if [ -z "$INSTANCE_IP" ]; then
+          echo "❌ No running EC2 instance found with tag Name=${{ env.PROJECT_NAME }}-*instance*"
+          echo "Please ensure Terraform has been applied and the EC2 instance is running"
+          exit 1
+        fi
+
+        echo "✅ Found EC2 instance with IP: $INSTANCE_IP"
+        echo "instance-ip=$INSTANCE_IP" >> $GITHUB_OUTPUT
+
+    - name: Deploy to EC2
+      env:
+        INSTANCE_IP: ${{ steps.get-instance.outputs.instance-ip }}
+        ECR_BACKEND_REPO: ${{ steps.ecr-repos.outputs.backend-repo }}
+        ECR_FRONTEND_REPO: ${{ steps.ecr-repos.outputs.frontend-repo }}
+      run: |
+        echo "🚀 Starting deployment to EC2 instance: $INSTANCE_IP"
+
+        # Setup SSH key from repo
+        chmod 600 terraform/dev.pem
+
+        # Create SSH directory and add instance to known hosts
+        mkdir -p ~/.ssh
+        ssh-keyscan -H $INSTANCE_IP >> ~/.ssh/known_hosts
+
+        # Step 1: Comprehensive Cleanup via SSH
+        echo "🧹 Running comprehensive cleanup on EC2..."
+        ssh -i terraform/dev.pem -o StrictHostKeyChecking=no ubuntu@$INSTANCE_IP << 'CLEANUP_EOF'
+          set -e
+          echo "🧹 Starting comprehensive cleanup..."
+          echo "📊 Disk usage before cleanup:"
+          df -h /
+
+          # Show Docker volumes (for safety - we'll preserve named volumes)
+          echo "🗂️  Current Docker volumes (named volumes will be preserved):"
+          sudo docker volume ls || true
+
+          # Stop and remove ONLY application containers (preserve database)
+          echo "🛑 Stopping and removing application containers (preserving database)..."
+
+          # Define containers to preserve (database and its dependencies)
+          PRESERVE_CONTAINERS="agentleague-postgres postgres"
+
+          # Get list of all containers except the ones we want to preserve
+          CONTAINERS_TO_REMOVE=""
+          for container in $(sudo docker ps -aq --format "{{.Names}}" 2>/dev/null || true); do
+            SHOULD_PRESERVE=false
+            for preserve in $PRESERVE_CONTAINERS; do
+              if echo "$container" | grep -q "$preserve"; then
+                echo "🔒 Preserving database container: $container"
+                SHOULD_PRESERVE=true
+                break
+              fi
+            done
+
+            if [ "$SHOULD_PRESERVE" = false ]; then
+              CONTAINERS_TO_REMOVE="$CONTAINERS_TO_REMOVE $container"
+            fi
+          done
+
+          if [ -n "$CONTAINERS_TO_REMOVE" ]; then
+            echo "Found application containers to clean up: $CONTAINERS_TO_REMOVE"
+
+            # Stop application containers (but not database)
+            echo "Stopping application containers..."
+            for container in $CONTAINERS_TO_REMOVE; do
+              sudo docker stop "$container" 2>/dev/null || true
+            done
+
+            # Remove application containers (but not database)
+            echo "Removing application containers..."
+            for container in $CONTAINERS_TO_REMOVE; do
+              sudo docker rm "$container" 2>/dev/null || true
+            done
+
+            echo "Application containers cleaned up successfully"
+          else
+            echo "No application containers found to clean up"
+          fi
+
+          # Stop only application services via docker-compose (preserve database)
+          cd /opt/app 2>/dev/null || true
+          echo "🔒 Stopping application services only (preserving database)..."
+          sudo docker-compose -f docker-compose.aws.yml stop agentleague-backend agentleague-frontend 2>/dev/null || true
+          sudo docker-compose -f docker-compose.aws.yml rm -f agentleague-backend agentleague-frontend 2>/dev/null || true
+          cd /home/ubuntu 2>/dev/null || true
+
+          # Verify no containers are running
+          echo "✅ Verifying container cleanup..."
+          echo "Running containers:"
+          sudo docker ps || echo "No containers running"
+          echo "All containers (including stopped):"
+          sudo docker ps -a || echo "No containers found"
+
+          # Clean up old Docker images (keep only 2 most recent per repo)
+          echo "🐳 Cleaning up old Docker images..."
+          for repo in "agentleague-backend" "agentleague-frontend"; do
+              echo "Cleaning up images for: $repo"
+              # Get image IDs sorted by creation date, keep only 2 most recent
+              sudo docker images --format "table {{.Repository}}:{{.Tag}}\t{{.ID}}\t{{.CreatedAt}}" | \
+                  grep "$repo" | grep -v "<none>" | sort -k3 -r | tail -n +3 | awk '{print $2}' | \
+                  xargs -r sudo docker rmi -f 2>/dev/null || true
+          done
+
+          # Clean up dangling images and unused resources (PRESERVE PostgreSQL volumes)
+          echo "🗑️  Cleaning up dangling images (preserving database volumes)..."
+          sudo docker system prune -af || true  # Removed --volumes to preserve PostgreSQL data
+          sudo docker image prune -af || true
+
+          # Clean up only unnamed/dangling volumes (explicitly preserve database volumes)
+          echo "🗂️  Cleaning up dangling volumes (preserving database volumes)..."
+          echo "🔒 Current named volumes (these will be preserved):"
+          sudo docker volume ls --filter "dangling=false" || true
+
+          # Only remove truly dangling volumes (not attached to any container)
+          echo "🗑️  Removing only dangling volumes..."
+          sudo docker volume prune -f || true
+
+          # Double-check that database volumes still exist
+          echo "✅ Verifying database volumes are preserved:"
+          sudo docker volume ls | grep -E "(postgres|database)" || echo "No database volumes found (this might be expected on first run)"
+
+          # Clean up log files and compressed files
+          echo "📝 Cleaning up log files..."
+          sudo find /opt/app/logs -name "*.gz" -mtime +2 -delete 2>/dev/null || true
+          sudo find /opt/app/logs -name "*.zip" -mtime +2 -delete 2>/dev/null || true
+          sudo find /opt/app/logs -name "*.log.*" -mtime +7 -delete 2>/dev/null || true
+          sudo find /var/log -name "*.gz" -mtime +2 -delete 2>/dev/null || true
+          sudo find /var/log -name "*.zip" -mtime +2 -delete 2>/dev/null || true
+
+          # Truncate Docker container logs (they can get very large)
+          echo "🐳 Truncating Docker container logs..."
+          for container in $(sudo docker ps -aq 2>/dev/null || true); do
+              if [ -n "$container" ]; then
+                  log_path=$(sudo docker inspect --format='{{.LogPath}}' "$container" 2>/dev/null || true)
+                  if [ -n "$log_path" ] && [ -f "$log_path" ]; then
+                      sudo tail -n 1000 "$log_path" > "/tmp/docker_log.tmp" 2>/dev/null || true
+                      sudo mv "/tmp/docker_log.tmp" "$log_path" 2>/dev/null || true
+                  fi
+              fi
+          done
+
+          # Clean up temporary files
+          echo "🗂️  Cleaning up temporary files..."
+          sudo find /tmp -name "*.log" -mtime +1 -delete 2>/dev/null || true
+          sudo find /tmp -name "*.tmp" -mtime +1 -delete 2>/dev/null || true
+          sudo find /tmp -name "core.*" -mtime +1 -delete 2>/dev/null || true
+
+          # Clean up package manager caches
+          echo "📦 Cleaning up package caches..."
+          sudo apt-get clean 2>/dev/null || true
+          sudo apt-get autoremove -y 2>/dev/null || true
+
+          # Clean up systemd journal logs
+          echo "📋 Cleaning up systemd logs..."
+          sudo journalctl --vacuum-time=7d 2>/dev/null || true
+          sudo journalctl --vacuum-size=100M 2>/dev/null || true
+
+          echo "📊 Disk usage after cleanup:"
+          df -h /
+          echo "✅ Cleanup completed successfully!"
+        CLEANUP_EOF
+
+        # Step 2: Prepare and copy docker-compose file to EC2
+        echo "📁 Preparing docker-compose.aws.yml with environment variables..."
+
+        # Create a temporary docker-compose file with environment variables substituted
+        export ECR_BACKEND_REPO="${{ steps.ecr-repos.outputs.backend-repo }}"
+        export ECR_FRONTEND_REPO="${{ steps.ecr-repos.outputs.frontend-repo }}"
+        export IMAGE_TAG="${{ github.run_id }}"
+        export PROJECT_NAME="${{ env.PROJECT_NAME }}"
+        export AWS_REGION="${{ env.AWS_REGION }}"
+        export SECRETS_MANAGER_NAME="dev_secret"
+        export DOMAIN_NAME="app.dev.agentleague.app"
+        export DB_PASSWORD="postgres123"  # Default for development
+
+        # Log the image tags being used
+        echo "🏷️  Using image tags:"
+        echo "  Backend: $ECR_BACKEND_REPO:$IMAGE_TAG"
+        echo "  Frontend: $ECR_FRONTEND_REPO:$IMAGE_TAG"
+
+        # Substitute environment variables in docker-compose.aws.yml
+        envsubst < docker-compose.aws.yml > docker-compose.aws.tmp.yml
+
+        echo "📁 Copying docker-compose file to EC2..."
+        # Copy to home directory first (ubuntu user has permissions)
+        scp -i terraform/dev.pem -o StrictHostKeyChecking=no docker-compose.aws.tmp.yml ubuntu@$INSTANCE_IP:/home/ubuntu/docker-compose.aws.yml
+
+        # Then copy to /opt/app using sudo via SSH and set proper permissions
+        ssh -i terraform/dev.pem -o StrictHostKeyChecking=no ubuntu@$INSTANCE_IP << 'COPY_EOF'
+          sudo mkdir -p /opt/app
+          sudo cp /home/ubuntu/docker-compose.aws.yml /opt/app/docker-compose.aws.yml
+          sudo chown ubuntu:ubuntu /opt/app/docker-compose.aws.yml
+          sudo chmod 644 /opt/app/docker-compose.aws.yml
+        COPY_EOF
+
+        # Verify the files were copied successfully
+        echo "✅ Verifying docker-compose files..."
+        ssh -i terraform/dev.pem -o StrictHostKeyChecking=no ubuntu@$INSTANCE_IP << 'VERIFY_EOF'
+          echo "Files in /home/ubuntu:"
+          ls -la /home/ubuntu/docker-compose.aws.yml || echo "Not found in /home/ubuntu"
+          echo "Files in /opt/app:"
+          sudo ls -la /opt/app/docker-compose.aws.yml || echo "Not found in /opt/app"
+        VERIFY_EOF
+
+        # Clean up temporary file
+        rm -f docker-compose.aws.tmp.yml
+
+        # Step 3: Deploy Application via SSH
+        echo "🚀 Deploying application to EC2..."
+        ssh -i terraform/dev.pem -o StrictHostKeyChecking=no ubuntu@$INSTANCE_IP << 'DEPLOY_EOF'
+          set -e
+          echo "🔄 Starting deployment on EC2 instance..."
+
+          # Set environment variables for deployment
+          export ECR_BACKEND_REPO="${{ steps.ecr-repos.outputs.backend-repo }}"
+          export ECR_FRONTEND_REPO="${{ steps.ecr-repos.outputs.frontend-repo }}"
+          export IMAGE_TAG="${{ github.run_id }}"
+          export DOMAIN_NAME="app.dev.agentleague.app"
+
+          # Run the deployment script
+          if [ -f /opt/app/deploy.sh ]; then
+            sudo /opt/app/deploy.sh
+          else
+            echo "⚠️  Deploy script not found, running manual deployment..."
+            cd /opt/app
+
+            # Login to ECR
+            aws ecr get-login-password --region us-east-1 | sudo docker login --username AWS --password-stdin $ECR_BACKEND_REPO
+
+            # Pull latest images
+            sudo docker pull $ECR_BACKEND_REPO:latest || echo "Backend image not found"
+            sudo docker pull $ECR_FRONTEND_REPO:latest || echo "Frontend image not found"
+
+            # Start containers using docker-compose
+            cd /opt/app
+
+            # Verify docker-compose file exists
+            if [ ! -f "docker-compose.aws.yml" ]; then
+                echo "Error: docker-compose.aws.yml not found in /opt/app"
+                ls -la /opt/app/
+                exit 1
+            fi
+
+            # Pre-clean conflicting application containers (preserve database)
+            echo "🧹 Pre-cleaning conflicting application containers (preserving database)..."
+
+            # Stop and remove only application containers, preserve database
+            for container_name in agentleague-backend agentleague-frontend; do
+              if sudo docker ps -a --filter "name=$container_name" --format "{{.Names}}" | grep -q "^$container_name$"; then
+                echo "Removing conflicting application container: $container_name"
+                sudo docker stop "$container_name" 2>/dev/null || true
+                sudo docker rm "$container_name" 2>/dev/null || true
+              fi
+            done
+
+            # Check if database container exists and is healthy
+            if sudo docker ps --filter "name=agentleague-postgres" --format "{{.Names}}" | grep -q "agentleague-postgres"; then
+              echo "🔒 Database container exists and will be preserved"
+              DB_STATUS=$(sudo docker ps --filter "name=agentleague-postgres" --format "{{.Status}}")
+              echo "Database status: $DB_STATUS"
+            else
+              echo "📊 No existing database container found - will be created fresh"
+            fi
+
+            # Remove only application service orphans, not database
+            sudo docker-compose -f docker-compose.aws.yml rm -f agentleague-backend agentleague-frontend 2>/dev/null || true
+
+            # Start containers with retry logic (database-aware)
+            echo "Starting containers with docker-compose (with retry, preserving database)..."
+            for attempt in 1 2 3; do
+              echo "Attempt $attempt/3..."
+
+              # Check if database is already running
+              if sudo docker ps --filter "name=agentleague-postgres" --format "{{.Names}}" | grep -q "agentleague-postgres"; then
+                echo "🔒 Database container already running, starting only application services..."
+                if sudo docker-compose -p agentleague -f docker-compose.aws.yml up -d agentleague-backend agentleague-frontend; then
+                  echo "✅ Successfully started application containers"
+                  break
+                fi
+              else
+                echo "📊 Starting all containers (including database)..."
+                if sudo docker-compose -p agentleague -f docker-compose.aws.yml up -d; then
+                  echo "✅ Successfully started all containers"
+                  break
+                fi
+              fi
+
+              echo "⚠️  Attempt $attempt failed"
+              if [ $attempt -eq 3 ]; then
+                echo "❌ Failed to start containers after 3 attempts"
+                echo "Docker compose logs:"
+                sudo docker-compose -f docker-compose.aws.yml logs || echo "No compose logs available"
+                exit 1
+              fi
+              echo "Cleaning up application containers and retrying in 10 seconds..."
+              sudo docker-compose -f docker-compose.aws.yml stop agentleague-backend agentleague-frontend 2>/dev/null || true
+              sudo docker-compose -f docker-compose.aws.yml rm -f agentleague-backend agentleague-frontend 2>/dev/null || true
+              sleep 10
+            done
+
+            echo "✅ Manual deployment completed"
+          fi
+
+          echo "🎉 Deployment completed successfully!"
+        DEPLOY_EOF
+
+        # Step 4: Verify Deployment and Show Status
+        echo "🔍 Verifying deployment status..."
+        ssh -i terraform/dev.pem -o StrictHostKeyChecking=no ubuntu@$INSTANCE_IP << 'VERIFY_EOF'
+          echo "📊 Container Status:"
+          sudo docker ps -a
+
+          echo ""
+          echo "🔍 Container Health Checks:"
+          for container in agentleague-backend agentleague-frontend agentleague-postgres; do
+            if sudo docker ps --filter "name=$container" --format "table {{.Names}}\t{{.Status}}" | grep -q "$container"; then
+              status=$(sudo docker ps --filter "name=$container" --format "{{.Status}}")
+              echo "$container: $status"
+
+              # If container is restarting or unhealthy, show logs
+              if echo "$status" | grep -q "Restarting\|Exited\|unhealthy"; then
+                echo "❌ $container is having issues. Recent logs:"
+                sudo docker logs $container --tail 20 2>&1 || echo "No logs available"
+                echo "---"
+              fi
+            else
+              echo "❌ $container: Not found"
+            fi
+          done
+
+          echo ""
+          echo "🌐 Network Connectivity Tests:"
+          echo "Testing internal connectivity..."
+
+          # Test if backend is responding
+          if sudo docker exec agentleague-backend wget --spider -q http://localhost:9998/health 2>/dev/null; then
+            echo "✅ Backend health check: PASSED"
+          else
+            echo "❌ Backend health check: FAILED"
+            echo "Backend logs:"
+            sudo docker logs agentleague-backend --tail 10 2>&1 || echo "No backend logs"
+          fi
+
+          # Test if frontend is responding
+          if sudo docker exec agentleague-frontend wget --spider -q http://localhost:5888 2>/dev/null; then
+            echo "✅ Frontend health check: PASSED"
+          else
+            echo "❌ Frontend health check: FAILED"
+            echo "Frontend logs:"
+            sudo docker logs agentleague-frontend --tail 10 2>&1 || echo "No frontend logs"
+          fi
+
+          # Test database connectivity
+          if sudo docker exec agentleague-postgres pg_isready -U postgres 2>/dev/null; then
+            echo "✅ Database health check: PASSED"
+          else
+            echo "❌ Database health check: FAILED"
+            echo "Database logs:"
+            sudo docker logs agentleague-postgres --tail 10 2>&1 || echo "No database logs"
+          fi
+
+          echo ""
+          echo "📊 System Resources:"
+          echo "Disk usage:"
+          df -h /
+          echo "Memory usage:"
+          free -h
+          echo "Docker system info:"
+          sudo docker system df
+
+          echo ""
+          echo "🏠 Architecture Information:"
+          echo "System architecture: $(uname -m)"
+          echo "Docker architecture: $(sudo docker version --format '{{.Server.Arch}}')"
+
+          echo ""
+          echo "💼 Image Architecture Information:"
+          for image in agentleague-backend agentleague-frontend; do
+            if sudo docker images | grep -q "$image"; then
+              echo "$image image details:"
+              IMAGE_ID=$(sudo docker images --filter "reference=*$image:latest" --format "{{.ID}}" | head -1)
+              if [ -n "$IMAGE_ID" ]; then
+                sudo docker inspect "$IMAGE_ID" --format '{{.Architecture}} {{.Os}}' 2>/dev/null || echo "Could not inspect image"
+              fi
+            fi
+          done
+        VERIFY_EOF
+
+        echo "✅ SSH deployment completed at $(date)"
+
+    - name: Verify deployment
+      env:
+        INSTANCE_IP: ${{ steps.get-instance.outputs.instance-ip }}
+        DOMAIN_NAME: app.dev.agentleague.app
+      run: |
+        echo "🔍 Verifying deployment..."
+        echo "Instance IP: $INSTANCE_IP"
+        echo "Domain: $DOMAIN_NAME"
+
+        # Wait for deployment to complete (backend needs time to build dependencies)
+        echo "⏳ Waiting for services to start (180 seconds)..."
+        sleep 180
+
+        # Function to check endpoint with retries
+        check_endpoint() {
+          local url=$1
+          local name=$2
+          local max_attempts=8
+          local attempt=1
+
+          while [ $attempt -le $max_attempts ]; do
+            echo "Checking $name (attempt $attempt/$max_attempts)..."
+            if curl -f -s --connect-timeout 15 --max-time 45 "$url" > /dev/null; then
+              echo "✅ $name is healthy"
+              return 0
+            else
+              echo "⚠️  $name check failed, retrying in 20 seconds..."
+              sleep 20
+              ((attempt++))
+            fi
+          done
+
+          echo "❌ $name failed after $max_attempts attempts"
+          return 1
+        }
+
+        # Check via domain (ONLY method - IP is blocked by security group)
+        echo "🌐 Checking domain endpoints (IP access blocked by security group)..."
+
+        # Backend health check
+        if check_endpoint "https://$DOMAIN_NAME/api/v1/health" "Backend API"; then
+          echo "✅ Backend is accessible via domain"
+        else
+          echo "❌ Backend health check failed via domain"
+          # Try to get more info about the failure
+          echo "🔍 Attempting to get response details..."
+          curl -v "https://$DOMAIN_NAME/api/v1/health" || true
+        fi
+
+        # Frontend health check
+        if check_endpoint "https://$DOMAIN_NAME/" "Frontend"; then
+          echo "✅ Frontend is accessible via domain"
+        else
+          echo "❌ Frontend health check failed via domain"
+          # Try to get more info about the failure
+          echo "🔍 Attempting to get response details..."
+          curl -v "https://$DOMAIN_NAME/" || true
+        fi
+
+          FAILED=0
+          if ! curl -f -s --connect-timeout 15 --max-time 45 "https://$DOMAIN_NAME/api/v1/health" > /dev/null; then FAILED=1; fi
+          if ! curl -f -s --connect-timeout 15 --max-time 45 "https://$DOMAIN_NAME/" > /dev/null; then FAILED=1; fi
+          if [ $FAILED -eq 1 ]; then
+            echo "❌ One or more endpoints unhealthy - failing Verify step"
+            exit 1
+          fi
+
+        echo "✅ Deployment verification completed (using domain-only access)"
+
+    - name: Print container logs on failure
+      if: failure() && steps.get-instance.outputs.instance-ip != ''
+      env:
+        INSTANCE_IP: ${{ steps.get-instance.outputs.instance-ip }}
+      run: |
+        echo "🧪 Verify step failed — collecting container logs..."
+        chmod 600 terraform/dev.pem
+        ssh -i terraform/dev.pem -o StrictHostKeyChecking=no ubuntu@$INSTANCE_IP << 'LOGS_EOF'
+          echo "📊 docker ps -a:"
+          sudo docker ps -a || true
+
+          echo ""
+          echo "📦 docker-compose ps:"
+          cd /opt/app && sudo docker-compose -f docker-compose.aws.yml ps || true
+
+          echo ""
+          echo "🧾 docker-compose logs (tail 300):"
+          sudo docker-compose -f docker-compose.aws.yml logs --tail=300 || true
+
+          echo ""
+          for c in agentleague-backend agentleague-frontend agentleague-postgres; do
+            echo "===== Logs: $c (tail 200) ====="
+            sudo docker logs --tail=200 "$c" 2>&1 || echo "No logs for $c"
+            echo ""
+          done
+        LOGS_EOF
+
+    - name: Notify deployment status
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ Deployment successful!"
+        else
+          echo "❌ Deployment failed!"
+        fi

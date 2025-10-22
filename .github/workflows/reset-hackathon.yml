@@ -1,0 +1,190 @@
+name: Reset Hackathon Environment Database
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "RESET" to confirm database wipe'
+        required: true
+        type: string
+
+env:
+  AWS_REGION: us-east-1
+  PROJECT_NAME: agentleague
+  ENVIRONMENT: hackathon
+  CLUSTER_NAME: agentleague-hackathon-cluster
+  SERVICE_NAME: agentleague-hackathon-backend
+
+concurrency:
+  group: reset-hackathon
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  reset-database:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "RESET" ]; then
+            echo "❌ Confirmation failed. You must type 'RESET' to proceed."
+            exit 1
+          fi
+          echo "✅ Confirmation validated. Proceeding with database reset..."
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install/Update AWS CLI
+        run: |
+          curl -sSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip -q awscliv2.zip
+          sudo ./aws/install --update
+          aws --version
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::619403130674:role/github
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS auth
+        run: aws sts get-caller-identity
+
+      - name: Capture current desired count
+        id: desired
+        run: |
+          COUNT=$(aws ecs describe-services \
+            --cluster "${{ env.CLUSTER_NAME }}" \
+            --services "${{ env.SERVICE_NAME }}" \
+            --query 'services[0].desiredCount' --output text)
+          echo "current=${COUNT}" >> $GITHUB_OUTPUT
+          echo "Current desired count: $COUNT"
+
+      - name: Scale service to 0 (stop backend)
+        if: steps.desired.outputs.current != '0'
+        run: |
+          aws ecs update-service \
+            --cluster "${{ env.CLUSTER_NAME }}" \
+            --service "${{ env.SERVICE_NAME }}" \
+            --desired-count 0
+          echo "⏳ Waiting for service to scale down..."
+          aws ecs wait services-stable \
+            --cluster "${{ env.CLUSTER_NAME }}" \
+            --services "${{ env.SERVICE_NAME }}"
+          echo "✅ Service scaled to 0"
+
+      - name: Get service network configuration
+        id: net
+        run: |
+          # Query subnets and security groups directly and emit as step outputs
+          SUBNETS=$(aws ecs describe-services \
+            --cluster "${{ env.CLUSTER_NAME }}" \
+            --services "${{ env.SERVICE_NAME }}" \
+            --query 'services[0].networkConfiguration.awsvpcConfiguration.subnets' \
+            --output json | jq -r 'join(",")')
+          SGS=$(aws ecs describe-services \
+            --cluster "${{ env.CLUSTER_NAME }}" \
+            --services "${{ env.SERVICE_NAME }}" \
+            --query 'services[0].networkConfiguration.awsvpcConfiguration.securityGroups' \
+            --output json | jq -r 'join(",")')
+          echo "subnets=$SUBNETS" >> $GITHUB_OUTPUT
+          echo "sgs=$SGS" >> $GITHUB_OUTPUT
+
+      - name: Run one-off ECS task to drop schema only
+        id: runtask
+        env:
+          SUBNETS: ${{ steps.net.outputs.subnets }}
+          SGS: ${{ steps.net.outputs.sgs }}
+        run: |
+          echo "🚀 Launching one-off task with backend image to reset Aurora DB..."
+          OVERRIDES=$(cat <<'JSON'
+          {
+            "containerOverrides": [
+              {
+                "name": "backend",
+                "command": [
+                  "bash","-lc",
+                  "set -e; \\\n                   echo '🔥 Dropping all tables (Aurora RDS)...'; \\\n                   uv run --package shared_db python -m shared_db.db.reset_database --drop-tables; \\\n                   echo '✅ DB drop completed. Schema will be recreated on app startup.'"
+                ]
+              }
+            ]
+          }
+          JSON
+          )
+          TASK_JSON=$(aws ecs run-task \
+            --cluster "${{ env.CLUSTER_NAME }}" \
+            --launch-type FARGATE \
+            --task-definition "${{ env.SERVICE_NAME }}" \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SGS],assignPublicIp=DISABLED}" \
+            --overrides "$OVERRIDES" \
+            --query 'tasks[0]' \
+            --output json)
+          echo "$TASK_JSON" | jq .
+          TASK_ARN=$(echo "$TASK_JSON" | jq -r '.taskArn')
+          echo "task-arn=$TASK_ARN" >> $GITHUB_OUTPUT
+          [ -n "$TASK_ARN" ] || (echo "Failed to start task" && exit 1)
+
+          echo "⏳ Waiting for task to stop..."
+          aws ecs wait tasks-stopped --cluster "${{ env.CLUSTER_NAME }}" --tasks "$TASK_ARN"
+
+          # Gather diagnostics
+          TASK_JSON_FULL=$(aws ecs describe-tasks \
+            --cluster "${{ env.CLUSTER_NAME }}" \
+            --tasks "$TASK_ARN" \
+            --output json)
+          echo "$TASK_JSON_FULL" | jq '.'
+          EXIT_CODE=$(echo "$TASK_JSON_FULL" | jq -r '.tasks[0].containers[0].exitCode')
+          STOPPED_REASON=$(echo "$TASK_JSON_FULL" | jq -r '.tasks[0].stoppedReason // empty')
+          CONTAINER_REASON=$(echo "$TASK_JSON_FULL" | jq -r '.tasks[0].containers[0].reason // empty')
+          echo "Task exit code: $EXIT_CODE"
+          echo "Stopped reason: ${STOPPED_REASON}"
+          echo "Container reason: ${CONTAINER_REASON}"
+
+          # Try to fetch CloudWatch Logs for the task
+          TASK_ID=$(echo "$TASK_ARN" | awk -F'/' '{print $NF}')
+          LOG_GROUP="/ecs/${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}"
+          LOG_STREAM="backend/backend/${TASK_ID}"
+          echo "Attempting to fetch last 200 log lines from ${LOG_GROUP} :: ${LOG_STREAM}"
+          aws logs get-log-events \
+            --log-group-name "$LOG_GROUP" \
+            --log-stream-name "$LOG_STREAM" \
+            --limit 200 \
+            --query 'events[].message' \
+            --output text || echo "(No logs available)"
+
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "❌ Reset task failed (exit $EXIT_CODE)"
+            exit 1
+          fi
+          echo "✅ Reset task completed successfully"
+
+      - name: Scale service back up
+        if: always()
+        run: |
+          TARGET=${{ steps.desired.outputs.current }}
+          if [ -z "$TARGET" ] || [ "$TARGET" = "None" ]; then TARGET=1; fi
+          echo "Restoring desired count to $TARGET"
+          aws ecs update-service \
+            --cluster "${{ env.CLUSTER_NAME }}" \
+            --service "${{ env.SERVICE_NAME }}" \
+            --desired-count "$TARGET"
+          echo "⏳ Waiting for service to stabilize..."
+          aws ecs wait services-stable \
+            --cluster "${{ env.CLUSTER_NAME }}" \
+            --services "${{ env.SERVICE_NAME }}"
+          echo "✅ Service is stable"
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ Hackathon DB reset completed. Backend scaled and healthy."
+          else
+            echo "❌ Hackathon DB reset failed. Check logs above for details."
+          fi
+

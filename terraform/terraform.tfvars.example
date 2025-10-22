@@ -1,0 +1,30 @@
+# Example Terraform variables file for dev environment
+# Copy this to terraform.tfvars and fill in your actual values
+
+# AWS Configuration
+aws_region = "us-east-1"
+
+# Project Configuration
+project_name = "agentleague"
+environment  = "dev"
+
+# EC2 Configuration
+instance_type        = "t4g.small"  # ARM-based instance for cost efficiency
+ami_id              = "ami-026fccd88446aa0bf"  # Ubuntu 22.04 ARM64
+key_pair_name       = "dev"  # Your AWS key pair name (corresponds to dev.pem)
+enable_spot_instance = true
+spot_price          = "0.5"  # Lower price for ARM instances
+
+# Domain and SSL
+domain_name     = "dev.agentleague.app"  # Your actual domain
+certificate_arn = "arn:aws:acm:us-east-1:619403130674:certificate/b0e6efd5-1c57-42a8-9deb-b29ab04eef56"  # Your ACM certificate ARN
+
+# Database Configuration
+use_rds              = false  # Use containerized PostgreSQL for cost savings
+db_instance_class    = "db.t3.micro"  # Only used if use_rds = true
+db_allocated_storage = 20
+db_name             = "agent_league"
+db_username         = "postgres"
+
+# GitHub Configuration (for OIDC authentication)
+github_repository = "your-username/your-repo-name"  # Replace with your GitHub repository
